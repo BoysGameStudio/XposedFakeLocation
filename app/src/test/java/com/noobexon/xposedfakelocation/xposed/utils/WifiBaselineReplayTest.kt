@@ -34,10 +34,14 @@ class WifiBaselineReplayTest {
         assertEquals("TestNet", scans.values[0].ssid)
         assertEquals(-51, scans.values[0].level)
         assertEquals(2_412, scans.values[0].frequencyMhz)
+        assertEquals(6, scans.values[0].wifiStandard)
+        assertEquals(false, scans.values[0].is80211mcResponder)
         assertEquals("aa:bb:cc:dd:ee:ff", scans.values[1].bssid)
         assertEquals("TestNet-5G", scans.values[1].ssid)
         assertEquals(-62, scans.values[1].level)
         assertEquals(5_180, scans.values[1].frequencyMhz)
+        assertEquals(6, scans.values[1].wifiStandard)
+        assertEquals(false, scans.values[1].is80211mcResponder)
     }
 
     @Test
@@ -71,6 +75,47 @@ class WifiBaselineReplayTest {
             ScanResultsReplayKind.EMPTY,
             WifiBaselineReplay.scanResultsReplayResult(corruptScans.copy(scanResultCount = 2)).kind
         )
+    }
+
+
+    @Test
+    fun wifiParcelMetadataIsCarriedIntoReplayValuesForLosslessRuntimeReplay() {
+        val parcelBytes = byteArrayOf(9, 8, 7, 6)
+        val parcelBase64 = Base64.getEncoder().encodeToString(parcelBytes)
+        val baselineWifi = SignalBaselineTestFixtures.validBaseline().wifi
+        val connection = requireNotNull(baselineWifi.connectionInfo).copy(
+            parcelBase64 = parcelBase64,
+            parcelClassName = "android.net.wifi.WifiInfo",
+            parcelByteCount = parcelBytes.size,
+            parcelSdkInt = SignalBaselineTestFixtures.CURRENT_SDK,
+            parcelBuildFingerprint = SignalBaselineTestFixtures.CURRENT_BUILD
+        )
+        val scan = baselineWifi.scanResults.single().copy(
+            parcelBase64 = parcelBase64,
+            parcelClassName = "android.net.wifi.ScanResult",
+            parcelByteCount = parcelBytes.size,
+            parcelSdkInt = SignalBaselineTestFixtures.CURRENT_SDK,
+            parcelBuildFingerprint = SignalBaselineTestFixtures.CURRENT_BUILD
+        )
+        val wifi = baselineWifi.copy(
+            connectionInfo = connection,
+            scanResults = listOf(scan),
+            scanResultCount = 1
+        )
+
+        val connectionReplay = WifiBaselineReplay.connectionReplayResult(wifi)
+        val scanReplay = WifiBaselineReplay.scanResultsReplayResult(wifi)
+
+        assertEquals(parcelBase64, connectionReplay.values.parcelBase64)
+        assertEquals("android.net.wifi.WifiInfo", connectionReplay.values.parcelClassName)
+        assertEquals(parcelBytes.size, connectionReplay.values.parcelByteCount)
+        assertEquals(SignalBaselineTestFixtures.CURRENT_SDK, connectionReplay.values.parcelSdkInt)
+        assertEquals(SignalBaselineTestFixtures.CURRENT_BUILD, connectionReplay.values.parcelBuildFingerprint)
+        assertEquals(parcelBase64, scanReplay.values.single().parcelBase64)
+        assertEquals("android.net.wifi.ScanResult", scanReplay.values.single().parcelClassName)
+        assertEquals(parcelBytes.size, scanReplay.values.single().parcelByteCount)
+        assertEquals(SignalBaselineTestFixtures.CURRENT_SDK, scanReplay.values.single().parcelSdkInt)
+        assertEquals(SignalBaselineTestFixtures.CURRENT_BUILD, scanReplay.values.single().parcelBuildFingerprint)
     }
 
     @Test

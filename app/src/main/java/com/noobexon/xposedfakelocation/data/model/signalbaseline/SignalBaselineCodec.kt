@@ -53,6 +53,14 @@ object SignalBaselineCodec {
         "android.telephony.NeighboringCellInfo"
     )
 
+    val allowedWifiInfoParcelClassNames: Set<String> = setOf(
+        "android.net.wifi.WifiInfo"
+    )
+
+    val allowedWifiScanResultParcelClassNames: Set<String> = setOf(
+        "android.net.wifi.ScanResult"
+    )
+
     private val allowedRadioTypes = setOf(
         RADIO_TYPE_GSM,
         RADIO_TYPE_LTE,
@@ -131,7 +139,8 @@ object SignalBaselineCodec {
         validateLocation(snapshot.location)?.let { return invalid(it) }
         validateCellular(snapshot.cellular, snapshot.captureSdkInt, snapshot.captureBuildFingerprint)
             ?.let { return invalid(it) }
-        validateWifi(snapshot.wifi)?.let { return invalid(it) }
+        validateWifi(snapshot.wifi, snapshot.captureSdkInt, snapshot.captureBuildFingerprint)
+            ?.let { return invalid(it) }
 
         return SignalBaselineValidationResult(isValid = true)
     }
@@ -366,24 +375,48 @@ object SignalBaselineCodec {
         return null
     }
 
-    private fun validateWifi(wifi: WifiBaselineSnapshot): String? {
+    private fun validateWifi(
+        wifi: WifiBaselineSnapshot,
+        captureSdkInt: Int,
+        captureBuildFingerprint: String
+    ): String? {
         if (wifi.scanResultCount != wifi.scanResults.size) return "wifi_scan_count_mismatch"
         if (wifi.scanResultCount > MAX_WIFI_SCANS) return "wifi_scan_oversized"
-        wifi.connectionInfo?.let { validateWifiInfo(it)?.let { reason -> return reason } }
+        wifi.connectionInfo?.let {
+            validateWifiInfo(it, captureSdkInt, captureBuildFingerprint)?.let { reason -> return reason }
+        }
         wifi.scanResults.forEach { scanResult ->
-            validateScanResult(scanResult)?.let { return it }
+            validateScanResult(scanResult, captureSdkInt, captureBuildFingerprint)?.let { return it }
         }
         return null
     }
 
-    private fun validateWifiInfo(wifiInfo: WifiInfoSnapshot): String? {
+    private fun validateWifiInfo(
+        wifiInfo: WifiInfoSnapshot,
+        captureSdkInt: Int,
+        captureBuildFingerprint: String
+    ): String? {
         validateWifiSsid(wifiInfo.ssid, wifiInfo.ssidBytesBase64)?.let { return it }
         validateBssid(wifiInfo.bssid)?.let { return it }
         if (wifiInfo.frequencyMhz != null && wifiInfo.frequencyMhz < 0) return "wifi_frequency_invalid"
-        return null
+        return validateParcelMetadata(
+            parcelBase64 = wifiInfo.parcelBase64,
+            parcelClassName = wifiInfo.parcelClassName,
+            parcelByteCount = wifiInfo.parcelByteCount,
+            parcelSdkInt = wifiInfo.parcelSdkInt,
+            parcelBuildFingerprint = wifiInfo.parcelBuildFingerprint,
+            captureSdkInt = captureSdkInt,
+            captureBuildFingerprint = captureBuildFingerprint,
+            allowedClassNames = allowedWifiInfoParcelClassNames,
+            reasonPrefix = "wifi_info_parcel"
+        )
     }
 
-    private fun validateScanResult(scanResult: ScanResultSnapshot): String? {
+    private fun validateScanResult(
+        scanResult: ScanResultSnapshot,
+        captureSdkInt: Int,
+        captureBuildFingerprint: String
+    ): String? {
         validateWifiSsid(scanResult.ssid, scanResult.ssidBytesBase64)?.let { return it }
         validateBssid(scanResult.bssid)?.let { return it }
         if (scanResult.capabilities != null && !isReasonableString(scanResult.capabilities, MAX_WIFI_CAPABILITIES_LENGTH)) {
@@ -393,7 +426,17 @@ object SignalBaselineCodec {
         if (scanResult.centerFreq0Mhz != null && scanResult.centerFreq0Mhz < 0) return "wifi_center_freq0_invalid"
         if (scanResult.centerFreq1Mhz != null && scanResult.centerFreq1Mhz < 0) return "wifi_center_freq1_invalid"
         if (scanResult.timestampMicros != null && scanResult.timestampMicros < 0L) return "wifi_timestamp_invalid"
-        return null
+        return validateParcelMetadata(
+            parcelBase64 = scanResult.parcelBase64,
+            parcelClassName = scanResult.parcelClassName,
+            parcelByteCount = scanResult.parcelByteCount,
+            parcelSdkInt = scanResult.parcelSdkInt,
+            parcelBuildFingerprint = scanResult.parcelBuildFingerprint,
+            captureSdkInt = captureSdkInt,
+            captureBuildFingerprint = captureBuildFingerprint,
+            allowedClassNames = allowedWifiScanResultParcelClassNames,
+            reasonPrefix = "wifi_scan_parcel"
+        )
     }
 
     private fun validateWifiSsid(ssid: String?, ssidBytesBase64: String?): String? {

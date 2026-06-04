@@ -4,6 +4,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Parcel
 import android.os.Parcelable
+import android.telephony.CellIdentity
 import android.telephony.CellInfo
 import android.telephony.CellLocation
 import android.telephony.NeighboringCellInfo
@@ -40,7 +41,11 @@ object CellularBaselineReplay {
             when (cellLocationReplayKind(snapshot)) {
                 CellLocationReplayKind.GSM -> {
                     val gsm = snapshot?.gsm ?: return null
-                    replayGsmCellLocation(gsm.lac ?: return null, gsm.cid ?: return null, gsm.psc)
+                    replayGsmCellLocation(
+                        lac = gsm.lac ?: UNKNOWN_CELL_LOCATION_VALUE,
+                        cid = gsm.cid ?: UNKNOWN_CELL_LOCATION_VALUE,
+                        psc = gsm.psc
+                    )
                 }
                 CellLocationReplayKind.CDMA -> {
                     val cdma = snapshot?.cdma ?: return null
@@ -63,6 +68,11 @@ object CellularBaselineReplay {
 
     fun replayCellLocationBundle(cellular: CellularBaselineSnapshot?): Bundle? {
         return replayCellLocationBundle(cellular?.cellLocation)
+    }
+
+    fun replayCellIdentity(cellular: CellularBaselineSnapshot?): CellIdentity? {
+        val records = replayAllCellInfo(cellular)
+        return (records.firstOrNull { it.isRegistered } ?: records.firstOrNull())?.cellIdentity
     }
 
     @Suppress("DEPRECATION")
@@ -105,7 +115,11 @@ object CellularBaselineReplay {
         return when (snapshot?.type) {
             RADIO_TYPE_GSM -> {
                 val gsm = snapshot.gsm ?: return CellLocationReplayKind.NONE
-                if (gsm.lac == null || gsm.cid == null) CellLocationReplayKind.NONE else CellLocationReplayKind.GSM
+                if (gsm.lac == null && gsm.cid == null && gsm.psc == null) {
+                    CellLocationReplayKind.NONE
+                } else {
+                    CellLocationReplayKind.GSM
+                }
             }
             RADIO_TYPE_CDMA -> {
                 val cdma = snapshot.cdma ?: return CellLocationReplayKind.NONE
@@ -420,4 +434,5 @@ object CellularBaselineReplay {
     private const val GSM_BUNDLE_LAC = "lac"
     private const val GSM_BUNDLE_CID = "cid"
     private const val GSM_BUNDLE_PSC = "psc"
+    private const val UNKNOWN_CELL_LOCATION_VALUE = -1
 }

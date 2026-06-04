@@ -1,5 +1,6 @@
 package com.noobexon.xposedfakelocation.xposed.hooks
 
+import android.telephony.CellIdentity
 import com.google.gson.Gson
 import com.noobexon.xposedfakelocation.data.KEY_IS_PLAYING
 import com.noobexon.xposedfakelocation.data.KEY_TARGET_APPS
@@ -41,6 +42,32 @@ class PhoneServicesHooksCellBaselineTest {
 
         require(missing is PhoneServiceHookResult.Spoofed)
         assertNull(missing.value)
+    }
+
+    @Test
+    fun cellLocationHookResult_usesCellIdentityReturnTypeForModernPhoneService() {
+        initPreferences(isPlaying = true, targets = listOf(TARGET_PACKAGE))
+        val cellular = SignalBaselineTestFixtures.validBaseline().cellular
+        val method = HookReturnTypes::class.java.getDeclaredMethod("cellIdentity")
+        val sentinel = Any()
+        var replayedCellular: Any? = null
+        var replayedMethod: Any? = null
+
+        val replay = PhoneServicesHooks.cellLocationHookResult(
+            args = listOf(TARGET_PACKAGE),
+            method = method,
+            cellularProvider = { cellular },
+            replayProvider = { replayCellular, replayMethod ->
+                replayedCellular = replayCellular
+                replayedMethod = replayMethod
+                sentinel
+            }
+        )
+
+        require(replay is PhoneServiceHookResult.Spoofed)
+        assertSame(sentinel, replay.value)
+        assertSame(cellular, replayedCellular)
+        assertSame(method, replayedMethod)
     }
 
     @Test
@@ -111,6 +138,9 @@ class PhoneServicesHooksCellBaselineTest {
     private class HookReturnTypes {
         @Suppress("unused")
         fun cellLocation(): Any? = null
+
+        @Suppress("unused")
+        fun cellIdentity(): CellIdentity? = null
     }
 
     private companion object {

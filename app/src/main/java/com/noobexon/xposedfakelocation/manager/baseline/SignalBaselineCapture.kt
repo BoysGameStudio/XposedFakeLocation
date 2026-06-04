@@ -698,6 +698,26 @@ private fun NeighboringCellInfoSnapshot.withParcelMetadata(parcelMetadata: Parce
     )
 }
 
+private fun WifiInfoSnapshot.withParcelMetadata(parcelMetadata: ParcelMetadata?): WifiInfoSnapshot {
+    return copy(
+        parcelBase64 = parcelMetadata?.base64,
+        parcelClassName = parcelMetadata?.className,
+        parcelByteCount = parcelMetadata?.byteCount,
+        parcelSdkInt = parcelMetadata?.sdkInt,
+        parcelBuildFingerprint = parcelMetadata?.buildFingerprint
+    )
+}
+
+private fun ScanResultSnapshot.withParcelMetadata(parcelMetadata: ParcelMetadata?): ScanResultSnapshot {
+    return copy(
+        parcelBase64 = parcelMetadata?.base64,
+        parcelClassName = parcelMetadata?.className,
+        parcelByteCount = parcelMetadata?.byteCount,
+        parcelSdkInt = parcelMetadata?.sdkInt,
+        parcelBuildFingerprint = parcelMetadata?.buildFingerprint
+    )
+}
+
 private fun Parcelable.toParcelMetadata(allowedClassNames: Set<String>): ParcelMetadata? {
     val className = javaClass.name
     if (className !in allowedClassNames) return null

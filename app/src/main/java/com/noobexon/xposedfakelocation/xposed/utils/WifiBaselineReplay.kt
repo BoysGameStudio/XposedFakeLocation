@@ -5,7 +5,10 @@ package com.noobexon.xposedfakelocation.xposed.utils
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiInfo
 import android.os.Build
+import android.os.Parcel
+import android.os.Parcelable
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.ScanResultSnapshot
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.WifiBaselineSnapshot
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.WifiInfoSnapshot
 import java.lang.reflect.Constructor
@@ -49,7 +52,7 @@ object WifiBaselineReplay {
     internal fun replayScanResults(result: ScanResultsReplayResult): List<ScanResult> {
         if (result.kind == ScanResultsReplayKind.EMPTY) return emptyList()
         return result.values.map { values ->
-            ScanResult().apply {
+            replayScanResultFromParcel(values) ?: ScanResult().apply {
                 SSID = values.ssid
                 BSSID = values.bssid
                 capabilities = values.capabilities
@@ -59,6 +62,10 @@ object WifiBaselineReplay {
                 values.centerFreq0Mhz?.let { centerFreq0 = it }
                 values.centerFreq1Mhz?.let { centerFreq1 = it }
                 values.timestampMicros?.let { timestamp = it }
+                values.wifiStandard?.let { setIntFieldIfPresent(SCAN_RESULT_WIFI_STANDARD_FIELDS, it) }
+                values.is80211mcResponder?.let {
+                    setBooleanFlagFieldIfPresent(SCAN_RESULT_FLAGS_FIELD, SCAN_RESULT_FLAG_80211MC_RESPONDER, it)
+                }
             }
         }
     }
@@ -134,7 +141,12 @@ object WifiBaselineReplay {
             txLinkSpeedMbps = snapshotValue.txLinkSpeedMbps,
             wifiStandard = snapshotValue.wifiStandard,
             currentSecurityType = snapshotValue.currentSecurityType,
-            subscriptionId = snapshotValue.subscriptionId
+            subscriptionId = snapshotValue.subscriptionId,
+            parcelBase64 = snapshotValue.parcelBase64,
+            parcelClassName = snapshotValue.parcelClassName,
+            parcelByteCount = snapshotValue.parcelByteCount,
+            parcelSdkInt = snapshotValue.parcelSdkInt,
+            parcelBuildFingerprint = snapshotValue.parcelBuildFingerprint
         )
     }
 
@@ -153,7 +165,12 @@ object WifiBaselineReplay {
             centerFreq1Mhz = snapshot.centerFreq1Mhz,
             timestampMicros = snapshot.timestampMicros,
             wifiStandard = snapshot.wifiStandard,
-            is80211mcResponder = snapshot.is80211mcResponder
+            is80211mcResponder = snapshot.is80211mcResponder,
+            parcelBase64 = snapshot.parcelBase64,
+            parcelClassName = snapshot.parcelClassName,
+            parcelByteCount = snapshot.parcelByteCount,
+            parcelSdkInt = snapshot.parcelSdkInt,
+            parcelBuildFingerprint = snapshot.parcelBuildFingerprint
         )
     }
 
@@ -170,11 +187,18 @@ object WifiBaselineReplay {
             txLinkSpeedMbps = null,
             wifiStandard = null,
             currentSecurityType = null,
-            subscriptionId = null
+            subscriptionId = null,
+            parcelBase64 = null,
+            parcelClassName = null,
+            parcelByteCount = null,
+            parcelSdkInt = null,
+            parcelBuildFingerprint = null
         )
     }
 
     private fun buildWifiInfo(values: WifiConnectionReplayValues): WifiInfo {
+        replayWifiInfoFromParcel(values)?.let { return it }
+
         val builder = WifiInfo.Builder()
             .setBssid(values.bssid)
             .setSsid(values.ssidBytes)
@@ -188,7 +212,103 @@ object WifiBaselineReplay {
             values.subscriptionId?.let { runCatching { builder.setSubscriptionId(it) } }
         }
 
-        return builder.build()
+        return builder.build().applySavedWifiInfoFields(values)
+    }
+
+
+    private fun replayWifiInfoFromParcel(values: WifiConnectionReplayValues): WifiInfo? {
+        return replayParcelable(
+            parcelBase64 = values.parcelBase64,
+            parcelClassName = values.parcelClassName,
+            parcelByteCount = values.parcelByteCount,
+            parcelSdkInt = values.parcelSdkInt,
+            parcelBuildFingerprint = values.parcelBuildFingerprint,
+            allowedClassNames = SignalBaselineCodec.allowedWifiInfoParcelClassNames,
+            expectedType = WifiInfo::class.java
+        )
+    }
+
+    private fun replayScanResultFromParcel(values: WifiScanResultReplayValues): ScanResult? {
+        return replayParcelable(
+            parcelBase64 = values.parcelBase64,
+            parcelClassName = values.parcelClassName,
+            parcelByteCount = values.parcelByteCount,
+            parcelSdkInt = values.parcelSdkInt,
+            parcelBuildFingerprint = values.parcelBuildFingerprint,
+            allowedClassNames = SignalBaselineCodec.allowedWifiScanResultParcelClassNames,
+            expectedType = ScanResult::class.java
+        )
+    }
+
+    private fun <T : Any> replayParcelable(
+        parcelBase64: String?,
+        parcelClassName: String?,
+        parcelByteCount: Int?,
+        parcelSdkInt: Int?,
+        parcelBuildFingerprint: String?,
+        allowedClassNames: Set<String>,
+        expectedType: Class<T>
+    ): T? {
+        val className = parcelClassName ?: return null
+        val byteCount = parcelByteCount ?: return null
+        val sdkInt = parcelSdkInt ?: return null
+        val buildFingerprint = parcelBuildFingerprint ?: return null
+        val base64 = parcelBase64 ?: return null
+        if (className !in allowedClassNames) return null
+        if (sdkInt != Build.VERSION.SDK_INT) return null
+        if (buildFingerprint != Build.FINGERPRINT.orEmpty()) return null
+        if (byteCount <= 0 || byteCount > SignalBaselineCodec.MAX_PARCEL_BLOB_BYTES) return null
+        val bytes = decodeParcelBytes(base64) ?: return null
+        if (bytes.size != byteCount) return null
+        val parcelClass = runCatching { Class.forName(className) }.getOrNull() ?: return null
+        if (!expectedType.isAssignableFrom(parcelClass)) return null
+
+        val parcel = Parcel.obtain()
+        return try {
+            parcel.unmarshall(bytes, 0, bytes.size)
+            parcel.setDataPosition(0)
+            val creator = parcelClass.getField("CREATOR").get(null) as? Parcelable.Creator<*> ?: return null
+            val value = creator.createFromParcel(parcel)
+            if (parcelClass.isInstance(value) && expectedType.isInstance(value)) expectedType.cast(value) else null
+        } catch (throwable: Throwable) {
+            null
+        } finally {
+            parcel.recycle()
+        }
+    }
+
+    private fun decodeParcelBytes(base64: String): ByteArray? {
+        val maxBase64Chars = ((SignalBaselineCodec.MAX_PARCEL_BLOB_BYTES + 2) / 3) * 4
+        if (base64.length > maxBase64Chars) return null
+        return runCatching { Base64.getDecoder().decode(base64) }.getOrNull()
+    }
+
+    private fun WifiInfo.applySavedWifiInfoFields(values: WifiConnectionReplayValues): WifiInfo {
+        values.frequencyMhz?.let { setIntFieldIfPresent(WIFI_INFO_FREQUENCY_FIELD, it) }
+        values.linkSpeedMbps?.let { setIntFieldIfPresent(WIFI_INFO_LINK_SPEED_FIELD, it) }
+        values.rxLinkSpeedMbps?.let { setIntFieldIfPresent(WIFI_INFO_RX_LINK_SPEED_FIELD, it) }
+        values.txLinkSpeedMbps?.let { setIntFieldIfPresent(WIFI_INFO_TX_LINK_SPEED_FIELD, it) }
+        values.wifiStandard?.let { setIntFieldIfPresent(WIFI_INFO_WIFI_STANDARD_FIELD, it) }
+        return this
+    }
+
+    private fun Any.setIntFieldIfPresent(fieldName: String, value: Int) {
+        runCatching {
+            javaClass.getDeclaredField(fieldName).apply { isAccessible = true }.setInt(this, value)
+        }
+    }
+
+    private fun Any.setIntFieldIfPresent(fieldNames: Iterable<String>, value: Int) {
+        fieldNames.forEach { fieldName -> setIntFieldIfPresent(fieldName, value) }
+    }
+
+    private fun Any.setBooleanFlagFieldIfPresent(fieldName: String, flag: Long, enabled: Boolean) {
+        runCatching {
+            val field = javaClass.getDeclaredField(fieldName).apply { isAccessible = true }
+            val currentValue = field.getLong(this)
+            val updatedValue = if (enabled) currentValue or flag else currentValue and flag.inv()
+            field.setLong(this, updatedValue)
+        }
     }
 
     private fun replayParceledListSlice(returnType: Class<*>?, scanResults: List<ScanResult>): Any? {
@@ -288,7 +408,12 @@ object WifiBaselineReplay {
         val txLinkSpeedMbps: Int?,
         val wifiStandard: Int?,
         val currentSecurityType: Int?,
-        val subscriptionId: Int?
+        val subscriptionId: Int?,
+        val parcelBase64: String?,
+        val parcelClassName: String?,
+        val parcelByteCount: Int?,
+        val parcelSdkInt: Int?,
+        val parcelBuildFingerprint: String?
     )
 
     internal data class WifiScanResultReplayValues(
@@ -302,13 +427,26 @@ object WifiBaselineReplay {
         val centerFreq1Mhz: Int?,
         val timestampMicros: Long?,
         val wifiStandard: Int?,
-        val is80211mcResponder: Boolean?
+        val is80211mcResponder: Boolean?,
+        val parcelBase64: String?,
+        val parcelClassName: String?,
+        val parcelByteCount: Int?,
+        val parcelSdkInt: Int?,
+        val parcelBuildFingerprint: String?
     )
 
     internal enum class ConnectionReplayKind { SAVED_BASELINE, PLACEHOLDER }
     internal enum class ScanResultsReplayKind { SAVED_BASELINE, EMPTY }
     internal enum class ScanResultsReturnKind { LIST, PARCELED_LIST_SLICE, UNSUPPORTED }
 
+    private const val WIFI_INFO_FREQUENCY_FIELD = "mFrequency"
+    private const val WIFI_INFO_LINK_SPEED_FIELD = "mLinkSpeed"
+    private const val WIFI_INFO_RX_LINK_SPEED_FIELD = "mRxLinkSpeed"
+    private const val WIFI_INFO_TX_LINK_SPEED_FIELD = "mTxLinkSpeed"
+    private const val WIFI_INFO_WIFI_STANDARD_FIELD = "mWifiStandard"
+    private val SCAN_RESULT_WIFI_STANDARD_FIELDS = listOf("wifiStandard", "mWifiStandard")
+    private const val SCAN_RESULT_FLAGS_FIELD = "flags"
+    private const val SCAN_RESULT_FLAG_80211MC_RESPONDER = 1L shl 1
     private const val ANDROID_PARCELED_LIST_SLICE_CLASS_NAME = "android.content.pm.ParceledListSlice"
     private const val MODULES_PARCELED_LIST_SLICE_CLASS_NAME = "com.android.modules.utils.ParceledListSlice"
 }

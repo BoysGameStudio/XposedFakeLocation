@@ -1,6 +1,7 @@
 package com.noobexon.xposedfakelocation.xposed.hooks
 
 import android.os.Bundle
+import android.telephony.CellIdentity
 import android.telephony.CellInfo
 import android.telephony.CellLocation
 import android.telephony.NeighboringCellInfo
@@ -122,18 +123,25 @@ class PhoneServicesHooks(
         internal fun cellLocationHookResult(
             args: List<Any?>?,
             method: Method?,
-            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline,
+            replayProvider: (CellularBaselineSnapshot?, Method?) -> Any? = ::replayCellLocationValue
         ): PhoneServiceHookResult<Any?> {
             if (!shouldSpoofPhoneServiceArgs(args)) return PhoneServiceHookResult.Passthrough
-            val cellular = cellularProvider()
-            val value = when {
+            return PhoneServiceHookResult.Spoofed(replayProvider(cellularProvider(), method))
+        }
+
+        private fun replayCellLocationValue(cellular: CellularBaselineSnapshot?, method: Method?): Any? {
+            return when {
                 method?.returnType == Bundle::class.java -> CellularBaselineReplay.replayCellLocationBundle(cellular)
+                method?.returnType?.let { CellIdentity::class.java.isAssignableFrom(it) } == true -> {
+                    CellularBaselineReplay.replayCellIdentity(cellular)
+                }
                 method?.returnType?.let { CellLocation::class.java.isAssignableFrom(it) } == true -> {
                     CellularBaselineReplay.replayCellLocation(cellular)
                 }
-                else -> CellularBaselineReplay.replayCellLocation(cellular)
+                method == null -> CellularBaselineReplay.replayCellLocation(cellular)
+                else -> null
             }
-            return PhoneServiceHookResult.Spoofed(value)
         }
 
         internal fun allCellInfoHookResult(

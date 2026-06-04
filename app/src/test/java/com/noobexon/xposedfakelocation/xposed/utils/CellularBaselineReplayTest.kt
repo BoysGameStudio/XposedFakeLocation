@@ -53,10 +53,14 @@ class CellularBaselineReplayTest {
     }
 
     @Test
-    fun cellLocationReplayKind_rejectsMissingRequiredTypedFields() {
-        val missingGsmCid = CellLocationSnapshot(
+    fun cellLocationReplayKind_preservesPartialGsmAndRejectsMissingRequiredCdmaFields() {
+        val partialGsm = CellLocationSnapshot(
             type = RADIO_TYPE_GSM,
             gsm = GsmCellLocationSnapshot(lac = 321, cid = null, psc = 9)
+        )
+        val emptyGsm = CellLocationSnapshot(
+            type = RADIO_TYPE_GSM,
+            gsm = GsmCellLocationSnapshot(lac = null, cid = null, psc = null)
         )
         val missingCdmaNetwork = CellLocationSnapshot(
             type = RADIO_TYPE_CDMA,
@@ -69,7 +73,8 @@ class CellularBaselineReplayTest {
             )
         )
 
-        assertEquals(CellLocationReplayKind.NONE, CellularBaselineReplay.cellLocationReplayKind(missingGsmCid))
+        assertEquals(CellLocationReplayKind.GSM, CellularBaselineReplay.cellLocationReplayKind(partialGsm))
+        assertEquals(CellLocationReplayKind.NONE, CellularBaselineReplay.cellLocationReplayKind(emptyGsm))
         assertEquals(CellLocationReplayKind.NONE, CellularBaselineReplay.cellLocationReplayKind(missingCdmaNetwork))
         assertEquals(CellLocationReplayKind.NONE, CellularBaselineReplay.cellLocationReplayKind(null))
     }

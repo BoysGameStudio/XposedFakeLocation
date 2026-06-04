@@ -18,7 +18,12 @@ data class WifiInfoSnapshot(
     val txLinkSpeedMbps: Int?,
     val wifiStandard: Int?,
     val currentSecurityType: Int?,
-    val subscriptionId: Int?
+    val subscriptionId: Int?,
+    val parcelBase64: String? = null,
+    val parcelClassName: String? = null,
+    val parcelByteCount: Int? = null,
+    val parcelSdkInt: Int? = null,
+    val parcelBuildFingerprint: String? = null
 )
 
 data class ScanResultSnapshot(
@@ -33,5 +38,10 @@ data class ScanResultSnapshot(
     val centerFreq1Mhz: Int?,
     val timestampMicros: Long?,
     val wifiStandard: Int?,
-    val is80211mcResponder: Boolean?
+    val is80211mcResponder: Boolean?,
+    val parcelBase64: String? = null,
+    val parcelClassName: String? = null,
+    val parcelByteCount: Int? = null,
+    val parcelSdkInt: Int? = null,
+    val parcelBuildFingerprint: String? = null
 )

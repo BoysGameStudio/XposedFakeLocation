@@ -129,6 +129,50 @@ class SignalBaselineCodecTest {
         )
     }
 
+
+    @Test
+    fun parse_rejectsUnknownWifiParcelClasses() {
+        val parcelBytes = byteArrayOf(8, 9, 10)
+        val baseline = validBaseline()
+        val invalidConnection = requireNotNull(baseline.wifi.connectionInfo).copy(
+            parcelBase64 = base64(parcelBytes),
+            parcelClassName = "android.net.wifi.UnknownWifiInfo",
+            parcelByteCount = parcelBytes.size,
+            parcelSdkInt = CURRENT_SDK,
+            parcelBuildFingerprint = CURRENT_BUILD
+        )
+        val invalidConnectionBaseline = baseline.copy(
+            wifi = baseline.wifi.copy(connectionInfo = invalidConnection)
+        )
+
+        assertNull(
+            SignalBaselineCodec.parseOrNull(
+                json = rawGson.toJson(invalidConnectionBaseline),
+                currentSdkInt = CURRENT_SDK,
+                currentBuildFingerprint = CURRENT_BUILD
+            )
+        )
+
+        val invalidScan = baseline.wifi.scanResults.single().copy(
+            parcelBase64 = base64(parcelBytes),
+            parcelClassName = "android.net.wifi.UnknownScanResult",
+            parcelByteCount = parcelBytes.size,
+            parcelSdkInt = CURRENT_SDK,
+            parcelBuildFingerprint = CURRENT_BUILD
+        )
+        val invalidScanBaseline = baseline.copy(
+            wifi = baseline.wifi.copy(scanResults = listOf(invalidScan), scanResultCount = 1)
+        )
+
+        assertNull(
+            SignalBaselineCodec.parseOrNull(
+                json = rawGson.toJson(invalidScanBaseline),
+                currentSdkInt = CURRENT_SDK,
+                currentBuildFingerprint = CURRENT_BUILD
+            )
+        )
+    }
+
     @Test
     fun parse_rejectsOversizedParcelBlob() {
         val invalidCell = gsmCellInfoSnapshot().copy(
