@@ -2,11 +2,14 @@
 package com.noobexon.xposedfakelocation.xposed.utils
 
 import android.content.SharedPreferences
+import android.os.Build
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.noobexon.xposedfakelocation.data.*
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
 
 object PreferencesUtil {
     private const val TAG = "[PreferencesUtil]"
@@ -39,6 +42,18 @@ object PreferencesUtil {
 
     fun getLastClickedLocation(): LastClickedLocation? {
         return getPreference<LastClickedLocation>(KEY_LAST_CLICKED_LOCATION)
+    }
+
+    fun getSignalBaseline(
+        currentSdkInt: Int = Build.VERSION.SDK_INT,
+        currentBuildFingerprint: String = Build.FINGERPRINT
+    ): SignalBaselineSnapshot? {
+        val json = runCatching {
+            preferences?.getString(KEY_SIGNAL_BASELINE_SNAPSHOT, null)
+        }.getOrNull() ?: return null
+        return runCatching {
+            SignalBaselineCodec.parseOrNull(json, currentSdkInt, currentBuildFingerprint)
+        }.getOrNull()
     }
 
     fun getUseAccuracy(): Boolean? {

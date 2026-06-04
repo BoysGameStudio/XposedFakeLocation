@@ -3,6 +3,7 @@ package com.noobexon.xposedfakelocation.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import android.util.Log
 import androidx.core.content.edit
 import com.google.gson.Gson
@@ -11,6 +12,10 @@ import com.google.gson.reflect.TypeToken
 import com.noobexon.xposedfakelocation.data.*
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfile
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfileCodec
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
 import com.noobexon.xposedfakelocation.manager.App
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -18,6 +23,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+
+private fun defaultRemotePrefs(): SharedPreferences? =
+    runCatching { App.service?.getRemotePreferences(REMOTE_PREFS_GROUP) }.getOrNull()
+
+private fun defaultRemotePrefsState(): Flow<SharedPreferences?> =
+    App.serviceState.map { service ->
+        runCatching { service?.getRemotePreferences(REMOTE_PREFS_GROUP) }.getOrNull()
+    }
 
 /**
  * Single-source-of-truth preferences store.
@@ -34,23 +48,33 @@ import kotlinx.coroutines.flow.flowOf
  * Doubles are encoded as raw long bits because [SharedPreferences] has no putDouble,
  * keeping read/write symmetry with the hook-side PreferencesUtil.
  */
-class PreferencesRepository(context: Context) {
+class PreferencesRepository internal constructor(
+    private val localPrefs: SharedPreferences,
+    private val remotePrefsProvider: () -> SharedPreferences?,
+    private val remotePrefsState: Flow<SharedPreferences?>,
+    private val sdkIntProvider: () -> Int = { Build.VERSION.SDK_INT },
+    private val buildFingerprintProvider: () -> String = { Build.FINGERPRINT }
+) {
     private val tag = "PreferencesRepository"
 
     private val gson = Gson()
 
-    private val localPrefs: SharedPreferences =
-        context.getSharedPreferences(SHARED_PREFS_FILE, Context.MODE_PRIVATE)
+    constructor(context: Context) : this(
+        localPrefs = context.getSharedPreferences(SHARED_PREFS_FILE, Context.MODE_PRIVATE),
+        remotePrefsProvider = ::defaultRemotePrefs,
+        remotePrefsState = defaultRemotePrefsState(),
+        sdkIntProvider = { Build.VERSION.SDK_INT },
+        buildFingerprintProvider = { Build.FINGERPRINT }
+    )
 
     private fun remotePrefs(): SharedPreferences? =
-        App.service?.getRemotePreferences(REMOTE_PREFS_GROUP)
+        runCatching { remotePrefsProvider() }.getOrNull()
 
     // region Flow helpers
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun <T> remoteFlow(key: String, default: T, read: (SharedPreferences) -> T): Flow<T> =
-        App.serviceState.flatMapLatest { service ->
-            val prefs = service?.getRemotePreferences(REMOTE_PREFS_GROUP)
+        remotePrefsState.flatMapLatest { prefs ->
             if (prefs == null) {
                 flowOf(default)
             } else {
@@ -81,10 +105,18 @@ class PreferencesRepository(context: Context) {
     private inline fun editRemote(action: SharedPreferences.Editor.() -> Unit) {
         val prefs = remotePrefs()
         if (prefs == null) {
-            Log.w(tag, "Remote preferences unavailable (service not bound); write skipped")
+            logWarning("Remote preferences unavailable (service not bound); write skipped")
             return
         }
         prefs.edit(action = action)
+    }
+
+    private inline fun editRemoteIfAvailable(action: SharedPreferences.Editor.() -> Unit): Boolean {
+        val prefs = remotePrefs() ?: return false
+        return runCatching {
+            prefs.edit(action = action)
+            true
+        }.getOrDefault(false)
     }
 
     private inline fun editLocal(action: SharedPreferences.Editor.() -> Unit) {
@@ -122,7 +154,7 @@ class PreferencesRepository(context: Context) {
     suspend fun clearLastClickedLocation() {
         editRemote { remove(KEY_LAST_CLICKED_LOCATION) }
         saveIsPlaying(false)
-        Log.d(tag, "Cleared 'LastClickedLocation' and set 'IsPlaying' to false")
+        logDebug("Cleared 'LastClickedLocation' and set 'IsPlaying' to false")
     }
 
     private fun parseLastClickedLocation(json: String?): LastClickedLocation? {
@@ -130,9 +162,47 @@ class PreferencesRepository(context: Context) {
         return try {
             gson.fromJson(json, LastClickedLocation::class.java)
         } catch (e: JsonSyntaxException) {
-            Log.e(tag, "Error parsing LastClickedLocation: ${e.message}")
+            logError("Error parsing LastClickedLocation: ${e.message}")
             null
         }
+    }
+    // endregion
+
+    // region Signal Baseline Snapshot (remote)
+    fun signalBaselineFlow(): Flow<SignalBaselineSnapshot?> =
+        remoteFlow<SignalBaselineSnapshot?>(KEY_SIGNAL_BASELINE_SNAPSHOT, null) { prefs ->
+            parseSignalBaseline(readSignalBaselineJson(prefs))
+        }
+
+    fun getSignalBaselineFlow(): Flow<SignalBaselineSnapshot?> = signalBaselineFlow()
+
+    suspend fun saveSignalBaseline(snapshot: SignalBaselineSnapshot): Boolean {
+        val json = SignalBaselineCodec.encodeToJson(snapshot) ?: return false
+        return editRemoteIfAvailable {
+            putString(KEY_SIGNAL_BASELINE_SNAPSHOT, json)
+        }
+    }
+
+    fun getSignalBaseline(): SignalBaselineSnapshot? =
+        parseSignalBaseline(readSignalBaselineJson(remotePrefs()))
+
+    suspend fun clearSignalBaseline(): Boolean =
+        editRemoteIfAvailable {
+            remove(KEY_SIGNAL_BASELINE_SNAPSHOT)
+        }
+
+    private fun readSignalBaselineJson(prefs: SharedPreferences?): String? {
+        return runCatching { prefs?.getString(KEY_SIGNAL_BASELINE_SNAPSHOT, null) }.getOrNull()
+    }
+
+    private fun parseSignalBaseline(json: String?): SignalBaselineSnapshot? {
+        return runCatching {
+            SignalBaselineCodec.parseOrNull(
+                json = json,
+                currentSdkInt = sdkIntProvider(),
+                currentBuildFingerprint = buildFingerprintProvider()
+            )
+        }.getOrNull()
     }
     // endregion
 
@@ -243,7 +313,7 @@ class PreferencesRepository(context: Context) {
             val type = object : TypeToken<List<String>>() {}.type
             gson.fromJson<List<String>>(json, type).toSet()
         } catch (e: JsonSyntaxException) {
-            Log.e(tag, "Error parsing target apps: ${e.message}")
+            logError("Error parsing target apps: ${e.message}")
             emptySet()
         }
     }
@@ -256,13 +326,13 @@ class PreferencesRepository(context: Context) {
     suspend fun addFavorite(favorite: FavoriteLocation) {
         val updated = getFavorites().toMutableList().apply { add(favorite) }
         saveFavorites(updated)
-        Log.d(tag, "Added Favorite: $favorite")
+        logDebug("Added Favorite: $favorite")
     }
 
     suspend fun removeFavorite(favorite: FavoriteLocation) {
         val updated = getFavorites().toMutableList().apply { remove(favorite) }
         saveFavorites(updated)
-        Log.d(tag, "Removed Favorite: $favorite")
+        logDebug("Removed Favorite: $favorite")
     }
 
     fun getFavorites(): List<FavoriteLocation> = parseFavorites(localPrefs.getString(KEY_FAVORITES, null))
@@ -278,11 +348,64 @@ class PreferencesRepository(context: Context) {
             val type = object : TypeToken<List<FavoriteLocation>>() {}.type
             gson.fromJson(json, type)
         } catch (e: JsonSyntaxException) {
-            Log.e(tag, "Error parsing Favorites: ${e.message}")
+            logError("Error parsing Favorites: ${e.message}")
             emptyList()
         }
     }
     // endregion
+
+    fun getSavedLocationProfilesFlow(): Flow<List<SavedLocationProfile>> =
+        localFlow(KEY_SAVED_LOCATION_PROFILES) { parseSavedLocationProfiles(it.getString(KEY_SAVED_LOCATION_PROFILES, null)) }
+
+    fun getSavedLocationProfiles(): List<SavedLocationProfile> =
+        parseSavedLocationProfiles(localPrefs.getString(KEY_SAVED_LOCATION_PROFILES, null))
+
+    suspend fun saveLocationProfile(profile: SavedLocationProfile): Boolean {
+        val updated = (listOf(profile) + getSavedLocationProfiles().filterNot { it.id == profile.id })
+            .sortedByDescending(SavedLocationProfile::savedAtMillis)
+            .take(SavedLocationProfileCodec.MAX_PROFILE_COUNT)
+        return saveSavedLocationProfiles(updated)
+    }
+
+    suspend fun removeSavedLocationProfile(id: String): Boolean {
+        val updated = getSavedLocationProfiles().filterNot { it.id == id }
+        return saveSavedLocationProfiles(updated)
+    }
+
+    suspend fun importSavedLocationProfilesJson(json: String): Int? {
+        val result = SavedLocationProfileCodec.parseProfiles(
+            json = json,
+            currentSdkInt = sdkIntProvider(),
+            currentBuildFingerprint = buildFingerprintProvider()
+        )
+        if (!result.isValid) return null
+
+        val currentProfilesById = getSavedLocationProfiles().associateBy(SavedLocationProfile::id)
+        val importedProfilesById = result.profiles.associateBy(SavedLocationProfile::id)
+        val mergedProfiles = (currentProfilesById + importedProfilesById)
+            .values
+            .sortedByDescending(SavedLocationProfile::savedAtMillis)
+            .take(SavedLocationProfileCodec.MAX_PROFILE_COUNT)
+
+        return if (saveSavedLocationProfiles(mergedProfiles)) result.profiles.size else null
+    }
+
+    fun exportSavedLocationProfilesJson(): String? =
+        SavedLocationProfileCodec.encodeProfiles(getSavedLocationProfiles())
+
+    private fun saveSavedLocationProfiles(profiles: List<SavedLocationProfile>): Boolean {
+        val json = SavedLocationProfileCodec.encodeProfiles(profiles) ?: return false
+        editLocal { putString(KEY_SAVED_LOCATION_PROFILES, json) }
+        return true
+    }
+
+    private fun parseSavedLocationProfiles(json: String?): List<SavedLocationProfile> {
+        return SavedLocationProfileCodec.parseProfiles(
+            json = json,
+            currentSdkInt = sdkIntProvider(),
+            currentBuildFingerprint = buildFingerprintProvider()
+        ).profiles
+    }
 
     // region Broadcast Control (local)
     fun getEnableBroadcastControlFlow(): Flow<Boolean> = localFlow(KEY_ENABLE_BROADCAST_CONTROL) { it.getBoolean(KEY_ENABLE_BROADCAST_CONTROL, DEFAULT_ENABLE_BROADCAST_CONTROL) }
@@ -293,4 +416,16 @@ class PreferencesRepository(context: Context) {
     fun getLanguageTagFlow(): Flow<String> = localFlow(KEY_LANGUAGE_TAG) { it.getString(KEY_LANGUAGE_TAG, DEFAULT_LANGUAGE_TAG) ?: DEFAULT_LANGUAGE_TAG }
     suspend fun saveLanguageTag(languageTag: String) = editLocal { putString(KEY_LANGUAGE_TAG, languageTag) }
     // endregion
+
+    private fun logWarning(message: String) {
+        runCatching { Log.w(tag, message) }
+    }
+
+    private fun logError(message: String) {
+        runCatching { Log.e(tag, message) }
+    }
+
+    private fun logDebug(message: String) {
+        runCatching { Log.d(tag, message) }
+    }
 }

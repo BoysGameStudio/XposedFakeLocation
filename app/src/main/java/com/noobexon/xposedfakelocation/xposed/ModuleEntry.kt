@@ -7,6 +7,7 @@ import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.PhoneServicesHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.SystemServicesHooks
+import com.noobexon.xposedfakelocation.xposed.hooks.WifiManagerHooks
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedModule
@@ -24,6 +25,7 @@ class ModuleEntry : XposedModule() {
     private var locationApiHooks: LocationApiHooks? = null
     private var systemServicesHooks: SystemServicesHooks? = null
     private var phoneServicesHooks: PhoneServicesHooks? = null
+    private var wifiManagerHooks: WifiManagerHooks? = null
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         log(Log.INFO, TAG, "onModuleLoaded: ${param.processName}")
@@ -66,6 +68,8 @@ class ModuleEntry : XposedModule() {
     }
 
     private fun initHookingLogic(param: PackageReadyParam) {
+        wifiManagerHooks = WifiManagerHooks(this, param.classLoader, param.packageName).also { it.initHooks() }
+
         val clazz = Class.forName("android.app.Instrumentation", false, param.classLoader)
         val method = clazz.getDeclaredMethod("callApplicationOnCreate", Application::class.java)
 

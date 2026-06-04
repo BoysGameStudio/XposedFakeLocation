@@ -4,18 +4,18 @@ import android.Manifest
 import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationManager
-import android.os.Build
-import android.os.Bundle
+import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfile
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfileCodec
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
-import com.noobexon.xposedfakelocation.manager.export.LocationBaseInfoExporter
+import com.noobexon.xposedfakelocation.manager.baseline.SignalBaselineCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -43,9 +43,11 @@ sealed class LoadingState {
  */
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
-    private val locationBaseInfoExporter by lazy {
-        LocationBaseInfoExporter()
-    }
+    private val signalBaselineMenuActions = SignalBaselineMenuActions(
+        hasLocationPermission = { getApplication<Application>().hasLocationPermission() },
+        captureBaseline = { SignalBaselineCapture(getApplication<Application>()).capture() },
+        baselineStore = PreferencesSignalBaselineStore(preferencesRepository)
+    )
 
     /**
      * Represents field input state with value and validation error message
@@ -73,6 +75,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         val goToPointDialogState: DialogState = DialogState.Hidden,
         val addToFavoritesState: FavoritesInputState = FavoritesInputState(),
         val addToFavoritesDialogState: DialogState = DialogState.Hidden,
+        val signalBaselineDetailsDialogState: DialogState = DialogState.Hidden,
+        val savedLocationProfilesDialogState: DialogState = DialogState.Hidden,
+        val signalBaseline: SignalBaselineSnapshot? = null,
+        val savedLocationProfiles: List<SavedLocationProfile> = emptyList(),
+        val selectedSavedLocationProfile: SavedLocationProfile? = null,
         val goToPointState: Pair<InputFieldState, InputFieldState> = InputFieldState() to InputFieldState(),
     ) {
         val isFabClickable: Boolean
@@ -107,6 +114,24 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(lastClickedLocation = geoPoint) }
             }
         }
+
+        viewModelScope.launch {
+            preferencesRepository.signalBaselineFlow().collectLatest { baseline ->
+                _uiState.update { it.copy(signalBaseline = baseline) }
+            }
+        }
+
+        viewModelScope.launch {
+            preferencesRepository.getSavedLocationProfilesFlow().collectLatest { profiles ->
+                _uiState.update { state ->
+                    state.copy(
+                        savedLocationProfiles = profiles,
+                        selectedSavedLocationProfile = state.selectedSavedLocationProfile
+                            ?.let { selected -> profiles.firstOrNull { it.id == selected.id } }
+                    )
+                }
+            }
+        }
     }
 
     fun togglePlaying() {
@@ -135,143 +160,83 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    suspend fun exportSelectedLocationBaseInfo(): LocationBaseInfoExporter.ExportResult {
-        return exportCurrentLocationBaseInfo()
+    suspend fun saveRealEnvironmentBaseline(profileLabel: String? = null): SignalBaselineToastMessage = withContext(Dispatchers.IO) {
+        signalBaselineMenuActions.saveRealEnvironmentBaseline(profileLabel)
     }
 
-    suspend fun exportCurrentLocationBaseInfo(): LocationBaseInfoExporter.ExportResult = withContext(Dispatchers.IO) {
-        val context = getApplication<Application>()
-        if (!context.hasLocationPermission()) {
-            return@withContext LocationBaseInfoExporter.ExportResult.MissingLocationPermission
+    suspend fun clearRealEnvironmentBaseline(): SignalBaselineToastMessage = withContext(Dispatchers.IO) {
+        signalBaselineMenuActions.clearRealEnvironmentBaseline()
+    }
+
+    suspend fun exportSavedLocationProfiles(uri: Uri): SignalBaselineToastMessage = withContext(Dispatchers.IO) {
+        val json = preferencesRepository.exportSavedLocationProfilesJson()
+            ?: return@withContext SignalBaselineToastMessage(R.string.toast_location_profiles_export_failed)
+        val profileCount = preferencesRepository.getSavedLocationProfiles().size
+        val exported = runCatching {
+            getApplication<Application>().contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(json.toByteArray(Charsets.UTF_8))
+            } ?: error("output_stream_unavailable")
+        }.isSuccess
+
+        if (exported) {
+            SignalBaselineToastMessage(R.string.toast_location_profiles_export_success, listOf(profileCount))
+        } else {
+            SignalBaselineToastMessage(R.string.toast_location_profiles_export_failed)
+        }
+    }
+
+    suspend fun importSavedLocationProfiles(uri: Uri): SignalBaselineToastMessage = withContext(Dispatchers.IO) {
+        val json = runCatching {
+            getApplication<Application>().contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull() ?: return@withContext SignalBaselineToastMessage(R.string.toast_location_profiles_import_failed)
+
+        val importedCount = preferencesRepository.importSavedLocationProfilesJson(json)
+            ?: return@withContext SignalBaselineToastMessage(R.string.toast_location_profiles_import_failed)
+
+        SignalBaselineToastMessage(R.string.toast_location_profiles_import_success, listOf(importedCount))
+    }
+
+    suspend fun useSavedLocationProfile(profile: SavedLocationProfile): SignalBaselineToastMessage {
+        val activated = withContext(Dispatchers.IO) {
+            preferencesRepository.saveSignalBaseline(profile.baseline)
+        }
+        if (!activated) return SignalBaselineToastMessage(R.string.toast_location_profile_use_failed)
+
+        val location = profile.baseline.location
+        preferencesRepository.saveLastClickedLocation(location.latitude, location.longitude)
+        _goToPointEvent.emit(GeoPoint(location.latitude, location.longitude))
+        _uiState.update { it.copy(lastClickedLocation = GeoPoint(location.latitude, location.longitude)) }
+        return SignalBaselineToastMessage(R.string.toast_location_profile_use_success)
+    }
+
+    suspend fun deleteSavedLocationProfile(profile: SavedLocationProfile): SignalBaselineToastMessage = withContext(Dispatchers.IO) {
+        if (preferencesRepository.removeSavedLocationProfile(profile.id)) {
+            SignalBaselineToastMessage(R.string.toast_location_profile_delete_success)
+        } else {
+            SignalBaselineToastMessage(R.string.toast_location_profile_delete_failed)
+        }
+    }
+
+    suspend fun renameSavedLocationProfile(
+        profile: SavedLocationProfile,
+        label: String
+    ): SignalBaselineToastMessage = withContext(Dispatchers.IO) {
+        val normalizedLabel = label.trim()
+        if (normalizedLabel.isEmpty()) {
+            return@withContext SignalBaselineToastMessage(R.string.toast_location_profile_rename_failed)
         }
 
-        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            ?: return@withContext LocationBaseInfoExporter.ExportResult.NoRealLocation
-
-        val realLocation = try {
-            locationManager.newestBestLastKnownLocation()
-        } catch (exception: SecurityException) {
-            return@withContext LocationBaseInfoExporter.ExportResult.MissingLocationPermission
-        } ?: return@withContext LocationBaseInfoExporter.ExportResult.NoRealLocation
-
-        locationBaseInfoExporter.exportToAppSpecificExternalStorage(
-            context = context,
-            location = realLocation.toRealLocationSnapshot()
-        )
+        if (preferencesRepository.saveLocationProfile(profile.copy(label = normalizedLabel))) {
+            SignalBaselineToastMessage(R.string.toast_location_profile_rename_success)
+        } else {
+            SignalBaselineToastMessage(R.string.toast_location_profile_rename_failed)
+        }
     }
 
     private fun Context.hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
-
-    private fun LocationManager.newestBestLastKnownLocation(): Location? {
-        return getProviders(true)
-            .mapNotNull { provider -> getLastKnownLocation(provider) }
-            .reduceOrNull { bestLocation, candidateLocation ->
-                if (candidateLocation.isBetterExportLocationThan(bestLocation)) candidateLocation else bestLocation
-            }
-    }
-
-    private fun Location.isBetterExportLocationThan(currentBest: Location): Boolean {
-        if (time != currentBest.time) {
-            return time > currentBest.time
-        }
-
-        if (hasAccuracy() && currentBest.hasAccuracy()) {
-            return accuracy < currentBest.accuracy
-        }
-
-        return hasAccuracy() && !currentBest.hasAccuracy()
-    }
-
-    private fun Location.toRealLocationSnapshot(): LocationBaseInfoExporter.RealLocationSnapshot {
-        val (supportedExtras, unsupportedExtraKeys) = extras.toSupportedExtras()
-        return LocationBaseInfoExporter.RealLocationSnapshot(
-            provider = provider,
-            latitude = latitude,
-            longitude = longitude,
-            timeMillis = time,
-            elapsedRealtimeNanos = elapsedRealtimeNanos,
-            hasElapsedRealtimeUncertaintyNanos = hasElapsedRealtimeUncertaintyNanos(),
-            elapsedRealtimeUncertaintyNanos = if (hasElapsedRealtimeUncertaintyNanos()) elapsedRealtimeUncertaintyNanos else null,
-            hasAltitude = hasAltitude(),
-            altitudeMeters = if (hasAltitude()) altitude else null,
-            hasAccuracy = hasAccuracy(),
-            accuracyMeters = if (hasAccuracy()) accuracy else null,
-            hasSpeed = hasSpeed(),
-            speedMetersPerSecond = if (hasSpeed()) speed else null,
-            hasBearing = hasBearing(),
-            bearingDegrees = if (hasBearing()) bearing else null,
-            hasVerticalAccuracy = hasVerticalAccuracy(),
-            verticalAccuracyMeters = if (hasVerticalAccuracy()) verticalAccuracyMeters else null,
-            hasSpeedAccuracy = hasSpeedAccuracy(),
-            speedAccuracyMetersPerSecond = if (hasSpeedAccuracy()) speedAccuracyMetersPerSecond else null,
-            hasBearingAccuracy = hasBearingAccuracy(),
-            bearingAccuracyDegrees = if (hasBearingAccuracy()) bearingAccuracyDegrees else null,
-            hasMslAltitude = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitude(),
-            mslAltitudeMeters = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitude()) mslAltitudeMeters else null,
-            hasMslAltitudeAccuracy = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitudeAccuracy(),
-            mslAltitudeAccuracyMeters = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitudeAccuracy()) mslAltitudeAccuracyMeters else null,
-            isMock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) isMock else isFromMockProvider,
-            extras = supportedExtras,
-            extrasUnsupportedKeys = unsupportedExtraKeys
-        )
-    }
-
-    private fun Bundle?.toSupportedExtras(): Pair<Map<String, Any?>, List<String>> {
-        if (this == null || isEmpty) {
-            return emptyMap<String, Any?>() to emptyList()
-        }
-
-        val supportedExtras = linkedMapOf<String, Any?>()
-        val unsupportedExtraKeys = mutableListOf<String>()
-        keySet().forEach { key ->
-            val value = get(key)
-            val jsonValue = value.toJsonSupportedExtraValue()
-            if (jsonValue != UnsupportedExtraValue) {
-                supportedExtras[key] = jsonValue
-            } else {
-                unsupportedExtraKeys += key
-            }
-        }
-        return supportedExtras to unsupportedExtraKeys
-    }
-
-    private fun Any?.toJsonSupportedExtraValue(): Any? {
-        return when (this) {
-            null,
-            is String,
-            is Boolean,
-            is Byte,
-            is Short,
-            is Int,
-            is Long,
-            is Float,
-            is Double -> this
-            is Char -> toString()
-            is BooleanArray -> toList()
-            is ByteArray -> toList()
-            is ShortArray -> toList()
-            is IntArray -> toList()
-            is LongArray -> toList()
-            is FloatArray -> toList()
-            is DoubleArray -> toList()
-            is CharArray -> map { it.toString() }
-            is Array<*> -> mapSupportedExtraArray() ?: UnsupportedExtraValue
-            else -> UnsupportedExtraValue
-        }
-    }
-
-    private fun Array<*>.mapSupportedExtraArray(): List<Any?>? {
-        return map { value ->
-            val jsonValue = value.toJsonSupportedExtraValue()
-            if (jsonValue == UnsupportedExtraValue) return null
-            jsonValue
-        }
-    }
-
-    private data object UnsupportedExtraValue
 
     fun addFavoriteLocation(favoriteLocation: FavoriteLocation) {
         viewModelScope.launch {
@@ -353,6 +318,35 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         clearAddToFavoritesInputs()
     }
 
+    fun showSignalBaselineDetailsDialog() {
+        _uiState.update { it.copy(signalBaselineDetailsDialogState = DialogState.Visible) }
+    }
+
+    fun hideSignalBaselineDetailsDialog() {
+        _uiState.update { it.copy(signalBaselineDetailsDialogState = DialogState.Hidden) }
+    }
+
+    fun showSavedLocationProfilesDialog() {
+        _uiState.update { it.copy(savedLocationProfilesDialogState = DialogState.Visible) }
+    }
+
+    fun hideSavedLocationProfilesDialog() {
+        _uiState.update {
+            it.copy(
+                savedLocationProfilesDialogState = DialogState.Hidden,
+                selectedSavedLocationProfile = null
+            )
+        }
+    }
+
+    fun selectSavedLocationProfile(profile: SavedLocationProfile) {
+        _uiState.update { it.copy(selectedSavedLocationProfile = profile) }
+    }
+
+    fun showSavedLocationProfilesList() {
+        _uiState.update { it.copy(selectedSavedLocationProfile = null) }
+    }
+
     // Helper for input validation
     private fun validateInput(
         input: String, range: ClosedRange<Double>, @StringRes errorMessageRes: Int
@@ -429,5 +423,80 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     // Update map zoom level
     fun updateMapZoom(zoom: Double) {
         _uiState.update { it.copy(mapZoom = zoom) }
+    }
+}
+
+data class SignalBaselineToastMessage(
+    @StringRes val messageRes: Int,
+    val formatArgs: List<Any> = emptyList()
+)
+
+internal class SignalBaselineMenuActions(
+    private val hasLocationPermission: () -> Boolean,
+    private val captureBaseline: () -> SignalBaselineCapture.CaptureResult,
+    private val baselineStore: SignalBaselineStore
+) {
+    suspend fun saveRealEnvironmentBaseline(profileLabel: String? = null): SignalBaselineToastMessage {
+        if (!hasLocationPermission()) {
+            return SignalBaselineToastMessage(R.string.toast_signal_baseline_save_missing_permission)
+        }
+
+        return when (val result = captureBaseline()) {
+            SignalBaselineCapture.CaptureResult.NoRealLocation ->
+                SignalBaselineToastMessage(R.string.toast_signal_baseline_save_no_location)
+            is SignalBaselineCapture.CaptureResult.Success -> saveBaseline(result.snapshot, profileLabel)
+        }
+    }
+
+    suspend fun clearRealEnvironmentBaseline(): SignalBaselineToastMessage {
+        return if (baselineStore.clearSignalBaseline()) {
+            SignalBaselineToastMessage(R.string.toast_signal_baseline_clear_success)
+        } else {
+            SignalBaselineToastMessage(R.string.toast_signal_baseline_clear_failed)
+        }
+    }
+
+    private suspend fun saveBaseline(snapshot: SignalBaselineSnapshot, profileLabel: String?): SignalBaselineToastMessage {
+        if (!baselineStore.saveSignalBaseline(snapshot)) {
+            return SignalBaselineToastMessage(R.string.toast_signal_baseline_save_failed)
+        }
+        val profile = profileLabel
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { SavedLocationProfileCodec.createProfile(snapshot, label = it) }
+            ?: SavedLocationProfileCodec.createProfile(snapshot)
+        if (!baselineStore.saveLocationProfile(profile)) {
+            return SignalBaselineToastMessage(R.string.toast_signal_baseline_save_failed)
+        }
+
+        return SignalBaselineToastMessage(
+            messageRes = R.string.toast_signal_baseline_save_success,
+            formatArgs = listOf(
+                snapshot.cellular.cellInfoCount,
+                snapshot.wifi.scanResultCount
+            )
+        )
+    }
+}
+
+internal interface SignalBaselineStore {
+    suspend fun saveSignalBaseline(snapshot: SignalBaselineSnapshot): Boolean
+    suspend fun saveLocationProfile(profile: SavedLocationProfile): Boolean
+    suspend fun clearSignalBaseline(): Boolean
+}
+
+private class PreferencesSignalBaselineStore(
+    private val preferencesRepository: PreferencesRepository
+) : SignalBaselineStore {
+    override suspend fun saveSignalBaseline(snapshot: SignalBaselineSnapshot): Boolean {
+        return preferencesRepository.saveSignalBaseline(snapshot)
+    }
+
+    override suspend fun saveLocationProfile(profile: SavedLocationProfile): Boolean {
+        return preferencesRepository.saveLocationProfile(profile)
+    }
+
+    override suspend fun clearSignalBaseline(): Boolean {
+        return preferencesRepository.clearSignalBaseline()
     }
 }

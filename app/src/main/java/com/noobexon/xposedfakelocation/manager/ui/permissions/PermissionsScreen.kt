@@ -1,6 +1,5 @@
 package com.noobexon.xposedfakelocation.manager.ui.permissions
 
-import android.Manifest
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,10 +33,10 @@ fun PermissionsScreen(navController: NavController, permissionsViewModel: Permis
     val permissionsChecked by permissionsViewModel.permissionsChecked
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { granted ->
-            permissionsViewModel.updatePermissionsStatus(granted)
-            if (granted) {
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { grants ->
+            permissionsViewModel.updatePermissionsStatus(grants)
+            if (permissionsViewModel.hasPermissions.value) {
                 navController.navigate(Screen.Map.route) {
                     popUpTo(Screen.Permissions.route) { inclusive = true }
                 }
@@ -75,7 +74,7 @@ fun PermissionsScreen(navController: NavController, permissionsViewModel: Permis
                     PermanentlyDeniedScreen(context)
                 } else {
                     PermissionRequestScreen {
-                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        permissionLauncher.launch(requiredBaselineRuntimePermissions())
                     }
                 }
             }

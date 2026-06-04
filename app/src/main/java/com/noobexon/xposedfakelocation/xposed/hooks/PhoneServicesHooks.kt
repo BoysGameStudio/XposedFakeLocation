@@ -1,8 +1,12 @@
 package com.noobexon.xposedfakelocation.xposed.hooks
 
+import android.os.Bundle
 import android.telephony.CellInfo
+import android.telephony.CellLocation
 import android.telephony.NeighboringCellInfo
 import android.util.Log
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.CellularBaselineSnapshot
+import com.noobexon.xposedfakelocation.xposed.utils.CellularBaselineReplay
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
@@ -28,44 +32,39 @@ class PhoneServicesHooks(
 
     private fun hookCellLocation(phoneInterfaceManagerClass: Class<*>) {
         hookAll(phoneInterfaceManagerClass, "getCellLocation") { chain ->
-            val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
-                module.log(Log.INFO, tag, "Cleared cell location while spoofing.")
-                null
-            } else {
-                result
+            when (val replay = cellLocationHookResult(chain.args, chain.executable as? Method)) {
+                PhoneServiceHookResult.Passthrough -> chain.proceed()
+                is PhoneServiceHookResult.Spoofed -> {
+                    module.log(Log.INFO, tag, "Replayed saved cell location while spoofing.")
+                    replay.value
+                }
             }
         }
     }
 
     private fun hookCellInfo(phoneInterfaceManagerClass: Class<*>) {
         hookAll(phoneInterfaceManagerClass, "getAllCellInfo") { chain ->
-            if (shouldSpoofArgs(chain.args)) {
-                // Return empty cell info on purpose so apps that rely on tower checks can fall back
-                // to GPS-derived location when spoofing is active.
-                // TODO: This may conflict with other telephony signals (for example, network type
-                // still reporting MOBILE). If users report issues, synthesize coherent fake data.
-                module.log(Log.INFO, tag, "Cleared all cell info while spoofing.")
-                emptyList<CellInfo>()
-            } else {
-                chain.proceed()
+            when (val replay = allCellInfoHookResult(chain.args)) {
+                PhoneServiceHookResult.Passthrough -> chain.proceed()
+                is PhoneServiceHookResult.Spoofed -> {
+                    module.log(Log.INFO, tag, "Replayed saved all cell info while spoofing (${replay.value.size} records).")
+                    replay.value
+                }
             }
         }
 
         hookAll(phoneInterfaceManagerClass, "getNeighboringCellInfo") { chain ->
-            if (shouldSpoofArgs(chain.args)) {
-                // Same reasoning as getAllCellInfo: keep neighboring towers empty to encourage
-                // GPS fallback in apps that combine cell and GNSS signals.
-                // TODO: If consistency checks fail in some apps, provide coherent fake neighbors.
-                module.log(Log.INFO, tag, "Cleared neighboring cell info while spoofing.")
-                emptyList<NeighboringCellInfo>()
-            } else {
-                chain.proceed()
+            when (val replay = neighboringCellInfoHookResult(chain.args)) {
+                PhoneServiceHookResult.Passthrough -> chain.proceed()
+                is PhoneServiceHookResult.Spoofed -> {
+                    module.log(Log.INFO, tag, "Replayed saved neighboring cell info while spoofing (${replay.value.size} records).")
+                    replay.value
+                }
             }
         }
 
         hookAll(phoneInterfaceManagerClass, "requestCellInfoUpdateInternal") { chain ->
-            if (shouldSpoofArgs(chain.args)) {
+            if (shouldSpoofPhoneServiceArgs(chain.args)) {
                 module.log(Log.INFO, tag, "Blocked async cell info update while spoofing.")
                 defaultReturnValue(chain.executable as? Method)
             } else {
@@ -108,20 +107,6 @@ class PhoneServicesHooks(
         return null
     }
 
-    // Name-based attribution: only spoof while playing and when a target package can be read off
-    // the call arguments. Telephony calls carry the caller package as a plain String argument.
-    private fun shouldSpoofArgs(args: List<Any?>?): Boolean {
-        if (PreferencesUtil.getIsPlaying() != true) return false
-        return args?.asSequence()
-            ?.mapNotNull(::extractPackageName)
-            ?.any(LocationUtil::shouldSpoofPackage) == true
-    }
-
-    private fun extractPackageName(value: Any?): String? {
-        if (value is String) return value.takeIf { "." in it && !it.startsWith("android.") }
-        return null
-    }
-
     private fun defaultReturnValue(method: Method?): Any? {
         return when (method?.returnType) {
             java.lang.Boolean.TYPE -> false
@@ -132,4 +117,62 @@ class PhoneServicesHooks(
             else -> null
         }
     }
+
+    internal companion object {
+        internal fun cellLocationHookResult(
+            args: List<Any?>?,
+            method: Method?,
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline
+        ): PhoneServiceHookResult<Any?> {
+            if (!shouldSpoofPhoneServiceArgs(args)) return PhoneServiceHookResult.Passthrough
+            val cellular = cellularProvider()
+            val value = when {
+                method?.returnType == Bundle::class.java -> CellularBaselineReplay.replayCellLocationBundle(cellular)
+                method?.returnType?.let { CellLocation::class.java.isAssignableFrom(it) } == true -> {
+                    CellularBaselineReplay.replayCellLocation(cellular)
+                }
+                else -> CellularBaselineReplay.replayCellLocation(cellular)
+            }
+            return PhoneServiceHookResult.Spoofed(value)
+        }
+
+        internal fun allCellInfoHookResult(
+            args: List<Any?>?,
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline
+        ): PhoneServiceHookResult<List<CellInfo>> {
+            if (!shouldSpoofPhoneServiceArgs(args)) return PhoneServiceHookResult.Passthrough
+            return PhoneServiceHookResult.Spoofed(
+                CellularBaselineReplay.replayAllCellInfo(cellularProvider())
+            )
+        }
+
+        internal fun neighboringCellInfoHookResult(
+            args: List<Any?>?,
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline
+        ): PhoneServiceHookResult<List<NeighboringCellInfo>> {
+            if (!shouldSpoofPhoneServiceArgs(args)) return PhoneServiceHookResult.Passthrough
+            return PhoneServiceHookResult.Spoofed(CellularBaselineReplay.replayNeighboringCellInfo(cellularProvider()))
+        }
+
+        internal fun shouldSpoofPhoneServiceArgs(args: List<Any?>?): Boolean {
+            if (PreferencesUtil.getIsPlaying() != true) return false
+            return args?.asSequence()
+                ?.mapNotNull(::extractPackageName)
+                ?.any(LocationUtil::shouldSpoofPackage) == true
+        }
+
+        private fun activeCellularBaseline(): CellularBaselineSnapshot? {
+            return PreferencesUtil.getSignalBaseline()?.cellular
+        }
+
+        private fun extractPackageName(value: Any?): String? {
+            if (value is String) return value.takeIf { "." in it && !it.startsWith("android.") }
+            return null
+        }
+    }
+}
+
+internal sealed class PhoneServiceHookResult<out T> {
+    data object Passthrough : PhoneServiceHookResult<Nothing>()
+    data class Spoofed<out T>(val value: T) : PhoneServiceHookResult<T>()
 }

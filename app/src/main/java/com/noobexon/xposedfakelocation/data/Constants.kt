@@ -39,6 +39,9 @@ const val KEY_FAVORITES = "favorites"
 
 const val KEY_TARGET_APPS = "target_apps"
 
+const val KEY_SIGNAL_BASELINE_SNAPSHOT = "signal_baseline_snapshot"
+const val KEY_SAVED_LOCATION_PROFILES = "saved_location_profiles"
+
 const val KEY_HIDE_FAKE_LOCATION_TOAST = "hide_fake_location_toast"
 
 const val KEY_ENABLE_BROADCAST_CONTROL = "enable_broadcast_control"

@@ -1,0 +1,32 @@
+package com.noobexon.xposedfakelocation.data.model.signalbaseline
+
+data class LocationBaselineSnapshot(
+    val provider: String?,
+    val latitude: Double,
+    val longitude: Double,
+    val timeMillis: Long,
+    val elapsedRealtimeNanos: Long,
+    val hasElapsedRealtimeUncertaintyNanos: Boolean,
+    val elapsedRealtimeUncertaintyNanos: Double?,
+    val hasAltitude: Boolean,
+    val altitudeMeters: Double?,
+    val hasAccuracy: Boolean,
+    val accuracyMeters: Float?,
+    val hasSpeed: Boolean,
+    val speedMetersPerSecond: Float?,
+    val hasBearing: Boolean,
+    val bearingDegrees: Float?,
+    val hasVerticalAccuracy: Boolean,
+    val verticalAccuracyMeters: Float?,
+    val hasSpeedAccuracy: Boolean,
+    val speedAccuracyMetersPerSecond: Float?,
+    val hasBearingAccuracy: Boolean,
+    val bearingAccuracyDegrees: Float?,
+    val hasMslAltitude: Boolean,
+    val mslAltitudeMeters: Double?,
+    val hasMslAltitudeAccuracy: Boolean,
+    val mslAltitudeAccuracyMeters: Float?,
+    val isMock: Boolean,
+    val extras: Map<String, Any?>,
+    val extrasUnsupportedKeys: List<String>
+)

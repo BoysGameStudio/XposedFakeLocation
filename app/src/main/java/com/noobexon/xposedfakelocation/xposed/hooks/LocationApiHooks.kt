@@ -1,8 +1,10 @@
 package com.noobexon.xposedfakelocation.xposed.hooks
 
+import android.app.Application
 import android.location.Location
 import android.os.Build
 import android.util.Log
+import com.noobexon.xposedfakelocation.data.MANAGER_APP_PACKAGE_NAME
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
@@ -24,9 +26,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getLatitude()")
-                module.log(Log.INFO, tag, "\t Original latitude: $original")
-                if (PreferencesUtil.getIsPlaying() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.latitude}")
+                if (shouldSpoofLocationApi()) {
+                    module.log(Log.INFO, tag, "\t Returning spoofed latitude.")
                     LocationUtil.latitude
                 } else {
                     original
@@ -37,9 +38,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getLongitude()")
-                module.log(Log.INFO, tag, "\t Original longitude: $original")
-                if (PreferencesUtil.getIsPlaying() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.longitude}")
+                if (shouldSpoofLocationApi()) {
+                    module.log(Log.INFO, tag, "\t Returning spoofed longitude.")
                     LocationUtil.longitude
                 } else {
                     original
@@ -50,9 +50,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getAccuracy()")
-                module.log(Log.INFO, tag, "\t Original accuracy: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseAccuracy() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.accuracy}")
+                if (shouldSpoofLocationApi() && PreferencesUtil.getUseAccuracy() == true) {
+                    module.log(Log.INFO, tag, "\t Returning spoofed accuracy.")
                     LocationUtil.accuracy
                 } else {
                     original
@@ -63,9 +62,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getAltitude()")
-                module.log(Log.INFO, tag, "\t Original altitude: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseAltitude() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.altitude}")
+                if (shouldSpoofLocationApi() && PreferencesUtil.getUseAltitude() == true) {
+                    module.log(Log.INFO, tag, "\t Returning spoofed altitude.")
                     LocationUtil.altitude
                 } else {
                     original
@@ -76,9 +74,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getVerticalAccuracyMeters()")
-                module.log(Log.INFO, tag, "\tOriginal vertical accuracy: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseVerticalAccuracy() == true) {
-                    module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.verticalAccuracy}")
+                if (shouldSpoofLocationApi() && PreferencesUtil.getUseVerticalAccuracy() == true) {
+                    module.log(Log.INFO, tag, "\tReturning spoofed vertical accuracy.")
                     LocationUtil.verticalAccuracy
                 } else {
                     original
@@ -89,9 +86,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getSpeed()")
-                module.log(Log.INFO, tag, "\tOriginal speed: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseSpeed() == true) {
-                    module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.speed}")
+                if (shouldSpoofLocationApi() && PreferencesUtil.getUseSpeed() == true) {
+                    module.log(Log.INFO, tag, "\tReturning spoofed speed.")
                     LocationUtil.speed
                 } else {
                     original
@@ -102,9 +98,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                 val original = chain.proceed()
                 LocationUtil.updateLocation()
                 module.log(Log.INFO, tag, "Leaving method getSpeedAccuracyMetersPerSecond()")
-                module.log(Log.INFO, tag, "\tOriginal speed accuracy: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseSpeedAccuracy() == true) {
-                    module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.speedAccuracy}")
+                if (shouldSpoofLocationApi() && PreferencesUtil.getUseSpeedAccuracy() == true) {
+                    module.log(Log.INFO, tag, "\tReturning spoofed speed accuracy.")
                     LocationUtil.speedAccuracy
                 } else {
                     original
@@ -116,9 +111,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                     val original = chain.proceed()
                     LocationUtil.updateLocation()
                     module.log(Log.INFO, tag, "Leaving method getMslAltitudeMeters()")
-                    module.log(Log.INFO, tag, "\tOriginal MSL altitude: $original")
-                    if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseMeanSeaLevel() == true) {
-                        module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.meanSeaLevel}")
+                    if (shouldSpoofLocationApi() && PreferencesUtil.getUseMeanSeaLevel() == true) {
+                        module.log(Log.INFO, tag, "\tReturning spoofed MSL altitude.")
                         LocationUtil.meanSeaLevel
                     } else {
                         original
@@ -129,9 +123,8 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
                     val original = chain.proceed()
                     LocationUtil.updateLocation()
                     module.log(Log.INFO, tag, "Leaving method getMslAltitudeAccuracyMeters()")
-                    module.log(Log.INFO, tag, "\tOriginal MSL altitude accuracy: $original")
-                    if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
-                        module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.meanSeaLevelAccuracy}")
+                    if (shouldSpoofLocationApi() && PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
+                        module.log(Log.INFO, tag, "\tReturning spoofed MSL altitude accuracy.")
                         LocationUtil.meanSeaLevelAccuracy
                     } else {
                         original
@@ -154,12 +147,11 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
             module.hook(method).intercept { chain ->
                 val original = chain.proceed() as? Location
                 module.log(Log.INFO, tag, "Leaving method getLastKnownLocation(provider)")
-                module.log(Log.INFO, tag, "\t Original location: $original")
                 val provider = chain.getArg(0) as String
                 module.log(Log.INFO, tag, "\t Requested data from: $provider")
-                if (PreferencesUtil.getIsPlaying() == true) {
+                if (shouldSpoofLocationApi()) {
                     val fakeLocation = LocationUtil.createFakeLocation(provider = provider)
-                    module.log(Log.INFO, tag, "\t Modified location: $fakeLocation")
+                    module.log(Log.INFO, tag, "\t Returning spoofed location.")
                     fakeLocation
                 } else {
                     original
@@ -169,5 +161,11 @@ class LocationApiHooks(private val module: XposedInterface, private val classLoa
         } catch (e: Exception) {
             module.log(Log.ERROR, tag, "Error hooking LocationManager - ${e.message}")
         }
+    }
+
+    private fun shouldSpoofLocationApi(): Boolean {
+        if (PreferencesUtil.getIsPlaying() != true) return false
+        val processName = runCatching { Application.getProcessName() }.getOrNull()
+        return processName != MANAGER_APP_PACKAGE_NAME && processName?.startsWith("$MANAGER_APP_PACKAGE_NAME:") != true
     }
 }

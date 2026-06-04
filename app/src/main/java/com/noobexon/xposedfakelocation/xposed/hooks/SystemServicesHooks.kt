@@ -1,15 +1,22 @@
 // SystemServicesHooks.kt
+@file:Suppress("DEPRECATION")
+
 package com.noobexon.xposedfakelocation.xposed.hooks
 
 import android.location.Location
 import android.location.LocationManager
-import android.net.wifi.WifiInfo
 import android.os.Build
+import android.os.Bundle
+import android.telephony.CellLocation
 import android.telephony.CellInfo
 import android.util.ArrayMap
 import android.util.Log
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.CellularBaselineSnapshot
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.WifiBaselineSnapshot
+import com.noobexon.xposedfakelocation.xposed.utils.CellularBaselineReplay
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
+import com.noobexon.xposedfakelocation.xposed.utils.WifiBaselineReplay
 import dalvik.system.PathClassLoader
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Chain
@@ -149,22 +156,31 @@ class SystemServicesHooks(
         }
 
         hookAll(miuiClass, "getBlurryCellLocation") { chain ->
-            val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
-                module.log(Log.INFO, tag, "Cleared MIUI blurry cell location result.")
-                null
-            } else {
-                result
+            when (val replay = blurryCellLocationHookDecision(
+                args = chain.args,
+                method = chain.executable as? Method,
+                shouldSpoofArgs = ::shouldSpoofArgs
+            )) {
+                SystemServiceHookResult.Passthrough -> chain.proceed()
+                is SystemServiceHookResult.Spoofed -> {
+                    module.log(Log.INFO, tag, "Replayed MIUI blurry cell location while spoofing.")
+                    replay.value
+                }
             }
         }
 
         hookAll(miuiClass, "getBlurryCellInfos") { chain ->
-            val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
-                module.log(Log.INFO, tag, "Cleared MIUI blurry cell info result.")
-                emptyList<CellInfo>()
-            } else {
-                result
+            when (val replay = blurryCellInfosHookDecision(
+                args = chain.args,
+                method = chain.executable as? Method,
+                shouldSpoofArgs = ::shouldSpoofArgs
+            )) {
+                SystemServiceHookResult.Passthrough -> chain.proceed()
+                is SystemServiceHookResult.Spoofed -> {
+                    val count = (replay.value as? Collection<*>)?.size ?: 0
+                    module.log(Log.INFO, tag, "Replayed MIUI blurry cell info while spoofing ($count records).")
+                    replay.value
+                }
             }
         }
 
@@ -266,29 +282,30 @@ class SystemServicesHooks(
 
     private fun hookWifiServiceImpl(wifiServiceClass: Class<*>) {
         hookAll(wifiServiceClass, "getScanResults") { chain ->
-            val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
-                module.log(Log.INFO, tag, "Cleared Wi-Fi scan results while spoofing.")
-                emptyList<Any>()
-            } else {
-                result
+            val method = chain.executable as? Method
+            when (val replay = wifiScanResultsHookDecision(
+                args = chain.args,
+                method = method,
+                shouldSpoofArgs = ::shouldSpoofArgs
+            )) {
+                SystemServiceHookResult.Passthrough -> chain.proceed()
+                is SystemServiceHookResult.Spoofed -> {
+                    module.log(Log.INFO, tag, "Replayed Wi-Fi scan results while spoofing (${replay.value.values.size} records).")
+                    WifiBaselineReplay.replayScanResults(replay.value)
+                }
             }
         }
 
         hookAll(wifiServiceClass, "getConnectionInfo") { chain ->
-            val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
-                // TODO: These Wi-Fi identity values are hardcoded as a temporary fallback.
-                // Expose them as user-configurable settings in the manager app.
-                module.log(Log.INFO, tag, "Replaced Wi-Fi connection info while spoofing.")
-                WifiInfo.Builder()
-                    .setBssid("02:00:00:00:00:00")
-                    .setSsid("AndroidAP".toByteArray())
-                    .setRssi(-60)
-                    .setNetworkId(0)
-                    .build()
-            } else {
-                result
+            when (val replay = wifiConnectionInfoHookDecision(
+                args = chain.args,
+                shouldSpoofArgs = ::shouldSpoofArgs
+            )) {
+                SystemServiceHookResult.Passthrough -> chain.proceed()
+                is SystemServiceHookResult.Spoofed -> {
+                    module.log(Log.INFO, tag, "Replayed Wi-Fi connection info while spoofing.")
+                    WifiBaselineReplay.replayConnectionInfo(replay.value)
+                }
             }
         }
     }
@@ -577,4 +594,99 @@ class SystemServicesHooks(
             else -> null
         }
     }
+
+    internal companion object {
+        internal fun wifiConnectionInfoHookDecision(
+            args: List<Any?>?,
+            shouldSpoofArgs: (List<Any?>?) -> Boolean = ::shouldSpoofSimpleArgs,
+            wifiProvider: () -> WifiBaselineSnapshot? = ::activeWifiBaseline
+        ): SystemServiceHookResult<WifiBaselineReplay.ConnectionReplayResult> {
+            if (!shouldSpoofArgs(args)) return SystemServiceHookResult.Passthrough
+            return SystemServiceHookResult.Spoofed(
+                WifiBaselineReplay.connectionReplayResult(wifiProvider())
+            )
+        }
+
+        internal fun wifiScanResultsHookDecision(
+            args: List<Any?>?,
+            method: Method? = null,
+            shouldSpoofArgs: (List<Any?>?) -> Boolean = ::shouldSpoofSimpleArgs,
+            wifiProvider: () -> WifiBaselineSnapshot? = ::activeWifiBaseline
+        ): SystemServiceHookResult<WifiBaselineReplay.ScanResultsReplayPlan> {
+            if (!shouldSpoofArgs(args)) return SystemServiceHookResult.Passthrough
+            return SystemServiceHookResult.Spoofed(
+                WifiBaselineReplay.scanResultsReplayPlan(
+                    wifi = wifiProvider(),
+                    returnType = method?.returnType
+                )
+            )
+        }
+
+        internal fun blurryCellLocationHookDecision(
+            args: List<Any?>?,
+            method: Method?,
+            shouldSpoofArgs: (List<Any?>?) -> Boolean = ::shouldSpoofSimpleArgs,
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline,
+            replayProvider: (CellularBaselineSnapshot?, Method?) -> Any? = ::replayBlurryCellLocationValue
+        ): SystemServiceHookResult<Any?> {
+            if (!shouldSpoofArgs(args)) return SystemServiceHookResult.Passthrough
+            return SystemServiceHookResult.Spoofed(replayProvider(cellularProvider(), method))
+        }
+
+        internal fun blurryCellInfosHookDecision(
+            args: List<Any?>?,
+            method: Method?,
+            shouldSpoofArgs: (List<Any?>?) -> Boolean = ::shouldSpoofSimpleArgs,
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline,
+            replayProvider: (CellularBaselineSnapshot?, Method?) -> Any? = ::replayBlurryCellInfosValue
+        ): SystemServiceHookResult<Any?> {
+            if (!shouldSpoofArgs(args)) return SystemServiceHookResult.Passthrough
+            return SystemServiceHookResult.Spoofed(replayProvider(cellularProvider(), method))
+        }
+
+        private fun replayBlurryCellLocationValue(cellular: CellularBaselineSnapshot?, method: Method?): Any? {
+            return when {
+                method?.returnType == Bundle::class.java -> CellularBaselineReplay.replayCellLocationBundle(cellular)
+                method?.returnType?.let { CellLocation::class.java.isAssignableFrom(it) } == true -> {
+                    CellularBaselineReplay.replayCellLocation(cellular)
+                }
+                method == null -> CellularBaselineReplay.replayCellLocation(cellular)
+                else -> null
+            }
+        }
+
+        private fun replayBlurryCellInfosValue(cellular: CellularBaselineSnapshot?, method: Method?): Any? {
+            val records = CellularBaselineReplay.replayAllCellInfo(cellular)
+            val returnType = method?.returnType ?: return records
+            val componentType = returnType.componentType
+            val recordList = ArrayList(records)
+            return when {
+                returnType.isAssignableFrom(recordList.javaClass) -> recordList
+                returnType.isArray && componentType != null && CellInfo::class.java.isAssignableFrom(componentType) -> {
+                    records.toTypedArray()
+                }
+                else -> null
+            }
+        }
+
+        private fun activeWifiBaseline(): WifiBaselineSnapshot? {
+            return PreferencesUtil.getSignalBaseline()?.wifi
+        }
+
+        private fun activeCellularBaseline(): CellularBaselineSnapshot? {
+            return PreferencesUtil.getSignalBaseline()?.cellular
+        }
+
+        private fun shouldSpoofSimpleArgs(args: List<Any?>?): Boolean {
+            if (PreferencesUtil.getIsPlaying() != true) return false
+            return args?.asSequence()
+                ?.mapNotNull { it as? String }
+                ?.any(LocationUtil::shouldSpoofPackage) == true
+        }
+    }
+}
+
+internal sealed class SystemServiceHookResult<out T> {
+    data object Passthrough : SystemServiceHookResult<Nothing>()
+    data class Spoofed<out T>(val value: T) : SystemServiceHookResult<T>()
 }

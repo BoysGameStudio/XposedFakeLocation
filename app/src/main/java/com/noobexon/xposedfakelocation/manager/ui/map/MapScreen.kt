@@ -1,7 +1,12 @@
 package com.noobexon.xposedfakelocation.manager.ui.map
 
+import android.content.Context
+import android.content.ActivityNotFoundException
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -9,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditLocationAlt
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationSearching
@@ -29,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -41,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -49,11 +57,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
-import com.noobexon.xposedfakelocation.manager.export.LocationBaseInfoExporter
 import com.noobexon.xposedfakelocation.manager.ui.drawer.DrawerContent
 import com.noobexon.xposedfakelocation.manager.ui.map.components.AddToFavoritesDialog
 import com.noobexon.xposedfakelocation.manager.ui.map.components.GoToPointDialog
 import com.noobexon.xposedfakelocation.manager.ui.map.components.MapViewContainer
+import com.noobexon.xposedfakelocation.manager.ui.map.components.SaveLocationProfileTitleDialog
+import com.noobexon.xposedfakelocation.manager.ui.map.components.SavedLocationProfilesDialog
+import com.noobexon.xposedfakelocation.manager.ui.map.components.SignalBaselineDetailsDialog
+import com.noobexon.xposedfakelocation.manager.ui.map.components.SimulationDataDialog
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
@@ -69,11 +80,42 @@ fun MapScreen(
     val isFabClickable = uiState.isFabClickable
     val showGoToPointDialog = uiState.goToPointDialogState == DialogState.Visible
     val showAddToFavoritesDialog = uiState.addToFavoritesDialogState == DialogState.Visible
+    val showSignalBaselineDetailsDialog = uiState.signalBaselineDetailsDialogState == DialogState.Visible
+    val showSavedLocationProfilesDialog = uiState.savedLocationProfilesDialogState == DialogState.Visible
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showOptionsMenu by remember { mutableStateOf(false) }
+    var showSimulationDataDialog by remember { mutableStateOf(false) }
+    var showSaveLocationProfileTitleDialog by remember { mutableStateOf(false) }
     val fakeLocationSet = stringResource(R.string.toast_fake_location_set)
     val fakeLocationUnset = stringResource(R.string.toast_unset_fake_location)
+    val simulationStatusRes = when {
+        isPlaying && uiState.signalBaseline != null -> R.string.map_simulation_status_real_environment_active
+        isPlaying -> R.string.map_simulation_status_coordinate_active
+        uiState.signalBaseline != null -> R.string.map_simulation_status_real_environment_ready
+        else -> R.string.map_simulation_status_inactive
+    }
+    val showSimulationStatus = isPlaying || uiState.signalBaseline != null
+    val exportProfilesLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                val message = mapViewModel.exportSavedLocationProfiles(it)
+                Toast.makeText(context, context.getToastText(message), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val importProfilesLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                val message = mapViewModel.importSavedLocationProfiles(it)
+                Toast.makeText(context, context.getToastText(message), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
@@ -148,35 +190,77 @@ fun MapScreen(
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Save,
-                                        contentDescription = stringResource(R.string.map_save_location_base_info)
+                                        contentDescription = stringResource(R.string.map_save_signal_baseline)
                                     )
                                 },
-                                text = { Text(stringResource(R.string.map_save_location_base_info)) },
+                                text = { Text(stringResource(R.string.map_save_signal_baseline)) },
+                                onClick = {
+                                    showOptionsMenu = false
+                                    showSaveLocationProfileTitleDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.map_clear_signal_baseline)
+                                    )
+                                },
+                                text = { Text(stringResource(R.string.map_clear_signal_baseline)) },
                                 onClick = {
                                     showOptionsMenu = false
                                     scope.launch {
-                                        val message = when (val result = mapViewModel.exportCurrentLocationBaseInfo()) {
-                                            is LocationBaseInfoExporter.ExportResult.Success -> context.getString(
-                                                R.string.toast_location_base_info_export_success,
-                                                result.file.absolutePath
-                                            )
-                                            LocationBaseInfoExporter.ExportResult.NoRealLocation -> context.getString(
-                                                R.string.toast_location_base_info_export_no_location
-                                            )
-                                            LocationBaseInfoExporter.ExportResult.MissingLocationPermission -> context.getString(
-                                                R.string.toast_location_base_info_export_missing_permission
-                                            )
-                                            is LocationBaseInfoExporter.ExportResult.WriteFailure -> context.getString(
-                                                R.string.toast_location_base_info_export_failed,
-                                                result.cause.localizedMessage
-                                                    ?: result.cause.message
-                                                    ?: result.cause.javaClass.simpleName
-                                            )
-                                            else -> context.getString(
-                                                R.string.toast_location_base_info_export_no_location
-                                            )
-                                        }
-                                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                        val message = mapViewModel.clearRealEnvironmentBaseline()
+                                        Toast.makeText(context, context.getToastText(message), Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.EditLocationAlt,
+                                        contentDescription = stringResource(R.string.map_select_signal_baseline)
+                                    )
+                                },
+                                text = { Text(stringResource(R.string.map_select_signal_baseline)) },
+                                onClick = {
+                                    showOptionsMenu = false
+                                    mapViewModel.showSavedLocationProfilesDialog()
+                                },
+                                enabled = uiState.savedLocationProfiles.isNotEmpty()
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Save,
+                                        contentDescription = stringResource(R.string.map_export_location_profiles)
+                                    )
+                                },
+                                text = { Text(stringResource(R.string.map_export_location_profiles)) },
+                                onClick = {
+                                    showOptionsMenu = false
+                                    try {
+                                        exportProfilesLauncher.launch("xposedfakelocation-location-profiles.json")
+                                    } catch (exception: ActivityNotFoundException) {
+                                        Toast.makeText(context, R.string.toast_location_profiles_export_failed, Toast.LENGTH_LONG).show()
+                                    }
+                                },
+                                enabled = uiState.savedLocationProfiles.isNotEmpty()
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.BookmarkAdd,
+                                        contentDescription = stringResource(R.string.map_import_location_profiles)
+                                    )
+                                },
+                                text = { Text(stringResource(R.string.map_import_location_profiles)) },
+                                onClick = {
+                                    showOptionsMenu = false
+                                    try {
+                                        importProfilesLauncher.launch(arrayOf("application/json", "text/*"))
+                                    } catch (exception: ActivityNotFoundException) {
+                                        Toast.makeText(context, R.string.toast_location_profiles_import_failed, Toast.LENGTH_LONG).show()
                                     }
                                 }
                             )
@@ -259,6 +343,27 @@ fun MapScreen(
                     .padding(innerPadding)
             ) {
                 MapViewContainer(mapViewModel)
+                if (showSimulationStatus) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 16.dp)
+                            .clickable {
+                                showSimulationDataDialog = true
+                            },
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        tonalElevation = 3.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Text(
+                            text = stringResource(simulationStatusRes),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -293,5 +398,71 @@ fun MapScreen(
                 }
             )
         }
+
+        if (showSignalBaselineDetailsDialog) {
+            SignalBaselineDetailsDialog(
+                baseline = uiState.signalBaseline,
+                onDismissRequest = { mapViewModel.hideSignalBaselineDetailsDialog() }
+            )
+        }
+
+        if (showSimulationDataDialog) {
+            SimulationDataDialog(
+                baseline = uiState.signalBaseline,
+                coordinate = uiState.lastClickedLocation,
+                onDismissRequest = { showSimulationDataDialog = false }
+            )
+        }
+
+        if (showSaveLocationProfileTitleDialog) {
+            SaveLocationProfileTitleDialog(
+                onDismissRequest = { showSaveLocationProfileTitleDialog = false },
+                onSaveTitle = { title ->
+                    showSaveLocationProfileTitleDialog = false
+                    scope.launch {
+                        val message = mapViewModel.saveRealEnvironmentBaseline(title)
+                        Toast.makeText(context, context.getToastText(message), Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
+
+        if (showSavedLocationProfilesDialog) {
+            SavedLocationProfilesDialog(
+                profiles = uiState.savedLocationProfiles,
+                selectedProfile = uiState.selectedSavedLocationProfile,
+                onSelectProfile = mapViewModel::selectSavedLocationProfile,
+                onBackToList = mapViewModel::showSavedLocationProfilesList,
+                onUseProfile = { profile ->
+                    scope.launch {
+                        val message = mapViewModel.useSavedLocationProfile(profile)
+                        Toast.makeText(context, context.getToastText(message), Toast.LENGTH_SHORT).show()
+                        mapViewModel.hideSavedLocationProfilesDialog()
+                    }
+                },
+                onRenameProfile = { profile, title ->
+                    scope.launch {
+                        val message = mapViewModel.renameSavedLocationProfile(profile, title)
+                        Toast.makeText(context, context.getToastText(message), Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDeleteProfile = { profile ->
+                    scope.launch {
+                        val message = mapViewModel.deleteSavedLocationProfile(profile)
+                        Toast.makeText(context, context.getToastText(message), Toast.LENGTH_SHORT).show()
+                        mapViewModel.showSavedLocationProfilesList()
+                    }
+                },
+                onDismissRequest = { mapViewModel.hideSavedLocationProfilesDialog() }
+            )
+        }
+    }
+}
+
+private fun Context.getToastText(message: SignalBaselineToastMessage): String {
+    return if (message.formatArgs.isEmpty()) {
+        getString(message.messageRes)
+    } else {
+        getString(message.messageRes, *message.formatArgs.toTypedArray())
     }
 }
