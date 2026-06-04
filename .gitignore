@@ -40,6 +40,8 @@ app/google-services.json
 .kotlin/
 .cursor/
 .claude/
+.omo/
+.sisyphus/
 build-install.bat
 
 /.vscode
