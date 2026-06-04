@@ -1,14 +1,25 @@
 package com.noobexon.xposedfakelocation.manager.ui.map
 
+import android.Manifest
 import android.app.Application
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
+import android.os.Build
+import android.os.Bundle
 import androidx.annotation.StringRes
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
+import com.noobexon.xposedfakelocation.manager.export.LocationBaseInfoExporter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.osmdroid.util.GeoPoint
 
 /**
@@ -32,6 +43,9 @@ sealed class LoadingState {
  */
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
+    private val locationBaseInfoExporter by lazy {
+        LocationBaseInfoExporter()
+    }
 
     /**
      * Represents field input state with value and validation error message
@@ -120,6 +134,144 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             } ?: preferencesRepository.clearLastClickedLocation()
         }
     }
+
+    suspend fun exportSelectedLocationBaseInfo(): LocationBaseInfoExporter.ExportResult {
+        return exportCurrentLocationBaseInfo()
+    }
+
+    suspend fun exportCurrentLocationBaseInfo(): LocationBaseInfoExporter.ExportResult = withContext(Dispatchers.IO) {
+        val context = getApplication<Application>()
+        if (!context.hasLocationPermission()) {
+            return@withContext LocationBaseInfoExporter.ExportResult.MissingLocationPermission
+        }
+
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return@withContext LocationBaseInfoExporter.ExportResult.NoRealLocation
+
+        val realLocation = try {
+            locationManager.newestBestLastKnownLocation()
+        } catch (exception: SecurityException) {
+            return@withContext LocationBaseInfoExporter.ExportResult.MissingLocationPermission
+        } ?: return@withContext LocationBaseInfoExporter.ExportResult.NoRealLocation
+
+        locationBaseInfoExporter.exportToAppSpecificExternalStorage(
+            context = context,
+            location = realLocation.toRealLocationSnapshot()
+        )
+    }
+
+    private fun Context.hasLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun LocationManager.newestBestLastKnownLocation(): Location? {
+        return getProviders(true)
+            .mapNotNull { provider -> getLastKnownLocation(provider) }
+            .reduceOrNull { bestLocation, candidateLocation ->
+                if (candidateLocation.isBetterExportLocationThan(bestLocation)) candidateLocation else bestLocation
+            }
+    }
+
+    private fun Location.isBetterExportLocationThan(currentBest: Location): Boolean {
+        if (time != currentBest.time) {
+            return time > currentBest.time
+        }
+
+        if (hasAccuracy() && currentBest.hasAccuracy()) {
+            return accuracy < currentBest.accuracy
+        }
+
+        return hasAccuracy() && !currentBest.hasAccuracy()
+    }
+
+    private fun Location.toRealLocationSnapshot(): LocationBaseInfoExporter.RealLocationSnapshot {
+        val (supportedExtras, unsupportedExtraKeys) = extras.toSupportedExtras()
+        return LocationBaseInfoExporter.RealLocationSnapshot(
+            provider = provider,
+            latitude = latitude,
+            longitude = longitude,
+            timeMillis = time,
+            elapsedRealtimeNanos = elapsedRealtimeNanos,
+            hasElapsedRealtimeUncertaintyNanos = hasElapsedRealtimeUncertaintyNanos(),
+            elapsedRealtimeUncertaintyNanos = if (hasElapsedRealtimeUncertaintyNanos()) elapsedRealtimeUncertaintyNanos else null,
+            hasAltitude = hasAltitude(),
+            altitudeMeters = if (hasAltitude()) altitude else null,
+            hasAccuracy = hasAccuracy(),
+            accuracyMeters = if (hasAccuracy()) accuracy else null,
+            hasSpeed = hasSpeed(),
+            speedMetersPerSecond = if (hasSpeed()) speed else null,
+            hasBearing = hasBearing(),
+            bearingDegrees = if (hasBearing()) bearing else null,
+            hasVerticalAccuracy = hasVerticalAccuracy(),
+            verticalAccuracyMeters = if (hasVerticalAccuracy()) verticalAccuracyMeters else null,
+            hasSpeedAccuracy = hasSpeedAccuracy(),
+            speedAccuracyMetersPerSecond = if (hasSpeedAccuracy()) speedAccuracyMetersPerSecond else null,
+            hasBearingAccuracy = hasBearingAccuracy(),
+            bearingAccuracyDegrees = if (hasBearingAccuracy()) bearingAccuracyDegrees else null,
+            hasMslAltitude = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitude(),
+            mslAltitudeMeters = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitude()) mslAltitudeMeters else null,
+            hasMslAltitudeAccuracy = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitudeAccuracy(),
+            mslAltitudeAccuracyMeters = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasMslAltitudeAccuracy()) mslAltitudeAccuracyMeters else null,
+            isMock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) isMock else isFromMockProvider,
+            extras = supportedExtras,
+            extrasUnsupportedKeys = unsupportedExtraKeys
+        )
+    }
+
+    private fun Bundle?.toSupportedExtras(): Pair<Map<String, Any?>, List<String>> {
+        if (this == null || isEmpty) {
+            return emptyMap<String, Any?>() to emptyList()
+        }
+
+        val supportedExtras = linkedMapOf<String, Any?>()
+        val unsupportedExtraKeys = mutableListOf<String>()
+        keySet().forEach { key ->
+            val value = get(key)
+            val jsonValue = value.toJsonSupportedExtraValue()
+            if (jsonValue != UnsupportedExtraValue) {
+                supportedExtras[key] = jsonValue
+            } else {
+                unsupportedExtraKeys += key
+            }
+        }
+        return supportedExtras to unsupportedExtraKeys
+    }
+
+    private fun Any?.toJsonSupportedExtraValue(): Any? {
+        return when (this) {
+            null,
+            is String,
+            is Boolean,
+            is Byte,
+            is Short,
+            is Int,
+            is Long,
+            is Float,
+            is Double -> this
+            is Char -> toString()
+            is BooleanArray -> toList()
+            is ByteArray -> toList()
+            is ShortArray -> toList()
+            is IntArray -> toList()
+            is LongArray -> toList()
+            is FloatArray -> toList()
+            is DoubleArray -> toList()
+            is CharArray -> map { it.toString() }
+            is Array<*> -> mapSupportedExtraArray() ?: UnsupportedExtraValue
+            else -> UnsupportedExtraValue
+        }
+    }
+
+    private fun Array<*>.mapSupportedExtraArray(): List<Any?>? {
+        return map { value ->
+            val jsonValue = value.toJsonSupportedExtraValue()
+            if (jsonValue == UnsupportedExtraValue) return null
+            jsonValue
+        }
+    }
+
+    private data object UnsupportedExtraValue
 
     fun addFavoriteLocation(favoriteLocation: FavoriteLocation) {
         viewModelScope.launch {

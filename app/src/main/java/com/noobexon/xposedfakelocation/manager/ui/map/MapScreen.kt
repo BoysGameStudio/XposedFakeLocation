@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DropdownMenu
@@ -48,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
+import com.noobexon.xposedfakelocation.manager.export.LocationBaseInfoExporter
 import com.noobexon.xposedfakelocation.manager.ui.drawer.DrawerContent
 import com.noobexon.xposedfakelocation.manager.ui.map.components.AddToFavoritesDialog
 import com.noobexon.xposedfakelocation.manager.ui.map.components.GoToPointDialog
@@ -140,6 +142,42 @@ fun MapScreen(
                                 onClick = {
                                     showOptionsMenu = false
                                     mapViewModel.showAddToFavoritesDialog()
+                                }
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Save,
+                                        contentDescription = stringResource(R.string.map_save_location_base_info)
+                                    )
+                                },
+                                text = { Text(stringResource(R.string.map_save_location_base_info)) },
+                                onClick = {
+                                    showOptionsMenu = false
+                                    scope.launch {
+                                        val message = when (val result = mapViewModel.exportCurrentLocationBaseInfo()) {
+                                            is LocationBaseInfoExporter.ExportResult.Success -> context.getString(
+                                                R.string.toast_location_base_info_export_success,
+                                                result.file.absolutePath
+                                            )
+                                            LocationBaseInfoExporter.ExportResult.NoRealLocation -> context.getString(
+                                                R.string.toast_location_base_info_export_no_location
+                                            )
+                                            LocationBaseInfoExporter.ExportResult.MissingLocationPermission -> context.getString(
+                                                R.string.toast_location_base_info_export_missing_permission
+                                            )
+                                            is LocationBaseInfoExporter.ExportResult.WriteFailure -> context.getString(
+                                                R.string.toast_location_base_info_export_failed,
+                                                result.cause.localizedMessage
+                                                    ?: result.cause.message
+                                                    ?: result.cause.javaClass.simpleName
+                                            )
+                                            else -> context.getString(
+                                                R.string.toast_location_base_info_export_no_location
+                                            )
+                                        }
+                                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             )
                             DropdownMenuItem(
