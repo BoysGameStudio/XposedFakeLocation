@@ -635,7 +635,7 @@ private fun NeighboringCellInfo.toSnapshotOrNull(): NeighboringCellInfoSnapshot?
 
 private fun WifiInfo.toSnapshot(): WifiInfoSnapshot {
     val normalizedSsid = ssid.normalizedWifiSsid()
-    return WifiInfoSnapshot(
+    val snapshot = WifiInfoSnapshot(
         ssid = normalizedSsid,
         ssidBytesBase64 = normalizedSsid?.ssidBytesBase64(),
         bssid = bssid.nullIfBlank(),
@@ -649,6 +649,7 @@ private fun WifiInfo.toSnapshot(): WifiInfoSnapshot {
         currentSecurityType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) currentSecurityType.nonNegativeOrNull() else null,
         subscriptionId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) subscriptionId.nonNegativeOrNull() else null
     )
+    return snapshot.withParcelMetadata(toParcelMetadata(SignalBaselineCodec.allowedWifiInfoParcelClassNames))
 }
 
 @Suppress("UNCHECKED_CAST", "DEPRECATION")
@@ -662,7 +663,7 @@ private fun TelephonyManager.legacyNeighboringCellInfo(): List<NeighboringCellIn
 @Suppress("DEPRECATION")
 private fun ScanResult.toSnapshot(): ScanResultSnapshot {
     val normalizedSsid = SSID.normalizedWifiSsid()
-    return ScanResultSnapshot(
+    val snapshot = ScanResultSnapshot(
         ssid = normalizedSsid,
         ssidBytesBase64 = normalizedSsid?.ssidBytesBase64(),
         bssid = BSSID.nullIfBlank(),
@@ -676,6 +677,7 @@ private fun ScanResult.toSnapshot(): ScanResultSnapshot {
         wifiStandard = wifiStandard.nonNegativeOrNull(),
         is80211mcResponder = is80211mcResponder
     )
+    return snapshot.withParcelMetadata(toParcelMetadata(SignalBaselineCodec.allowedWifiScanResultParcelClassNames))
 }
 
 private fun CellInfoSnapshot.withParcelMetadata(parcelMetadata: ParcelMetadata?): CellInfoSnapshot {
