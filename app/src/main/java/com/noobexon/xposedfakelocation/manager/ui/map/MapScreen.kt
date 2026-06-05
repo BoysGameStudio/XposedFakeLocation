@@ -89,11 +89,18 @@ fun MapScreen(
     var showSaveLocationProfileTitleDialog by remember { mutableStateOf(false) }
     val fakeLocationSet = stringResource(R.string.toast_fake_location_set)
     val fakeLocationUnset = stringResource(R.string.toast_unset_fake_location)
-    val simulationStatusRes = when {
-        isPlaying && uiState.signalBaseline != null -> R.string.map_simulation_status_real_environment_active
-        isPlaying -> R.string.map_simulation_status_coordinate_active
-        uiState.signalBaseline != null -> R.string.map_simulation_status_real_environment_ready
-        else -> R.string.map_simulation_status_inactive
+    val activeLocationProfileLabel = uiState.activeLocationProfileLabel
+    val simulationStatusText = when {
+        isPlaying && uiState.signalBaseline != null && activeLocationProfileLabel != null -> {
+            stringResource(R.string.map_simulation_status_real_environment_active_named, activeLocationProfileLabel)
+        }
+        isPlaying && uiState.signalBaseline != null -> stringResource(R.string.map_simulation_status_real_environment_active)
+        isPlaying -> stringResource(R.string.map_simulation_status_coordinate_active)
+        uiState.signalBaseline != null && activeLocationProfileLabel != null -> {
+            stringResource(R.string.map_simulation_status_real_environment_ready_named, activeLocationProfileLabel)
+        }
+        uiState.signalBaseline != null -> stringResource(R.string.map_simulation_status_real_environment_ready)
+        else -> stringResource(R.string.map_simulation_status_inactive)
     }
     val showSimulationStatus = isPlaying || uiState.signalBaseline != null
     val exportProfilesLauncher = rememberLauncherForActivityResult(
@@ -357,7 +364,7 @@ fun MapScreen(
                         shadowElevation = 4.dp
                     ) {
                         Text(
-                            text = stringResource(simulationStatusRes),
+                            text = simulationStatusText,
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

@@ -116,8 +116,10 @@
     <string name="map_export_location_profiles">Export Location Profiles</string>
     <string name="map_import_location_profiles">Import Location Profiles</string>
     <string name="map_simulation_status_real_environment_active">Using real environment simulation</string>
+    <string name="map_simulation_status_real_environment_active_named">Using real environment simulation: %1$s</string>
     <string name="map_simulation_status_coordinate_active">Using coordinate-only simulation</string>
     <string name="map_simulation_status_real_environment_ready">Real environment baseline saved, simulation off</string>
+    <string name="map_simulation_status_real_environment_ready_named">Real environment baseline saved: %1$s</string>
     <string name="map_simulation_status_inactive">No real environment simulation</string>
     <string name="simulation_data_title">Current Simulation Data</string>
     <string name="simulation_data_empty">No simulation data is available.</string>

@@ -4,6 +4,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Parcel
 import android.os.Parcelable
+import android.os.SystemClock
 import android.telephony.CellIdentity
 import android.telephony.CellInfo
 import android.telephony.CellLocation
@@ -22,6 +23,7 @@ import com.noobexon.xposedfakelocation.data.model.signalbaseline.RADIO_TYPE_NR
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.RADIO_TYPE_TDSCDMA
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.RADIO_TYPE_WCDMA
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
+import java.lang.reflect.Field
 import java.util.Base64
 
 object CellularBaselineReplay {
@@ -30,6 +32,9 @@ object CellularBaselineReplay {
 
     @Volatile
     internal var currentBuildFingerprintProvider: () -> String = { Build.FINGERPRINT.orEmpty() }
+
+    @Volatile
+    internal var elapsedRealtimeNanosProvider: () -> Long = { SystemClock.elapsedRealtimeNanos() }
 
     fun replayCellLocation(cellular: CellularBaselineSnapshot?): CellLocation? {
         return replayCellLocation(cellular?.cellLocation)
@@ -138,7 +143,8 @@ object CellularBaselineReplay {
     internal fun replayCellInfo(
         snapshot: CellInfoSnapshot,
         currentSdkInt: Int = currentSdkIntProvider(),
-        currentBuildFingerprint: String = currentBuildFingerprintProvider()
+        currentBuildFingerprint: String = currentBuildFingerprintProvider(),
+        elapsedRealtimeNanos: Long? = null
     ): CellInfo? {
         if (!snapshot.hasParcelMetadata()) return null
         return replayParcelable(
@@ -151,7 +157,25 @@ object CellularBaselineReplay {
             currentBuildFingerprint = currentBuildFingerprint,
             allowedClassNames = SignalBaselineCodec.allowedCellInfoParcelClassNames,
             expectedType = CellInfo::class.java
-        )
+        )?.also { cellInfo ->
+            applyReplayTimestampFields(
+                target = cellInfo,
+                elapsedRealtimeNanos = elapsedRealtimeNanos ?: elapsedRealtimeNanosProvider()
+            )
+        }
+    }
+
+    internal fun applyReplayTimestampFields(target: Any, elapsedRealtimeNanos: Long): Boolean {
+        if (elapsedRealtimeNanos < 0L) return false
+        val elapsedRealtimeMillis = elapsedRealtimeNanos / 1_000_000L
+        var applied = false
+        for (fieldName in CELL_INFO_TIMESTAMP_NANOS_FIELDS) {
+            applied = target.setLongFieldIfPresent(fieldName, elapsedRealtimeNanos) || applied
+        }
+        for (fieldName in CELL_INFO_TIMESTAMP_MILLIS_FIELDS) {
+            applied = target.setLongFieldIfPresent(fieldName, elapsedRealtimeMillis) || applied
+        }
+        return applied
     }
 
     internal fun replayNeighboringCellInfo(
@@ -383,6 +407,22 @@ object CellularBaselineReplay {
         return runCatching { Base64.getDecoder().decode(base64) }.getOrNull()
     }
 
+    private fun Any.setLongFieldIfPresent(fieldName: String, value: Long): Boolean {
+        return runCatching {
+            val field = javaClass.findFieldInHierarchy(fieldName) ?: return@runCatching false
+            field.isAccessible = true
+            field.setLong(this, value)
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun Class<*>.findFieldInHierarchy(fieldName: String): Field? {
+        return generateSequence(this) { it.superclass }
+            .firstNotNullOfOrNull { type ->
+                runCatching { type.getDeclaredField(fieldName) }.getOrNull()
+            }
+    }
+
     private fun CellInfoSnapshot.hasParcelMetadata(): Boolean {
         return parcelBase64 != null || parcelClassName != null || parcelByteCount != null ||
             parcelSdkInt != null || parcelBuildFingerprint != null
@@ -435,4 +475,6 @@ object CellularBaselineReplay {
     private const val GSM_BUNDLE_CID = "cid"
     private const val GSM_BUNDLE_PSC = "psc"
     private const val UNKNOWN_CELL_LOCATION_VALUE = -1
+    private val CELL_INFO_TIMESTAMP_NANOS_FIELDS = listOf("mTimeStamp", "mTimestamp")
+    private val CELL_INFO_TIMESTAMP_MILLIS_FIELDS = listOf("mTimestampMillis", "mTimeStampMillis")
 }

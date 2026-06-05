@@ -116,8 +116,10 @@
     <string name="map_export_location_profiles">导出位置档案</string>
     <string name="map_import_location_profiles">导入位置档案</string>
     <string name="map_simulation_status_real_environment_active">正在使用真实环境模拟</string>
+    <string name="map_simulation_status_real_environment_active_named">正在使用真实环境模拟：%1$s</string>
     <string name="map_simulation_status_coordinate_active">正在使用纯坐标模拟</string>
     <string name="map_simulation_status_real_environment_ready">已保存真实环境基线，尚未开始模拟</string>
+    <string name="map_simulation_status_real_environment_ready_named">已保存真实环境基线：%1$s</string>
     <string name="map_simulation_status_inactive">未使用真实环境模拟</string>
     <string name="simulation_data_title">当前模拟数据</string>
     <string name="simulation_data_empty">当前没有可显示的模拟数据。</string>

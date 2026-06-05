@@ -2,7 +2,9 @@ package com.noobexon.xposedfakelocation.data.repository
 
 import com.google.gson.Gson
 import com.noobexon.xposedfakelocation.data.KEY_SIGNAL_BASELINE_SNAPSHOT
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfileArchive
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfileCodec
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
 import com.noobexon.xposedfakelocation.testutil.FakeSharedPreferences
 import com.noobexon.xposedfakelocation.testutil.SignalBaselineTestFixtures
@@ -169,12 +171,131 @@ class SignalBaselinePreferencesRepositoryTest {
         assertEquals(listOf(existingProfile), repository.getSavedLocationProfiles())
     }
 
+    @Test
+    fun importSavedLocationProfilesJson_keepsProfilesFromOtherBuildButActiveReplayStaysStrict() = runBlocking {
+        val sourceRepository = repository(FakeSharedPreferences())
+        val sourceProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = baselineForDevice(
+                sdkInt = SignalBaselineTestFixtures.CURRENT_SDK,
+                buildFingerprint = SignalBaselineTestFixtures.CURRENT_BUILD
+            ),
+            id = "source",
+            savedAtMillis = 1_000L,
+            label = "Source"
+        )
+        assertTrue(sourceRepository.saveLocationProfile(sourceProfile))
+        val exportedJson = requireNotNull(sourceRepository.exportSavedLocationProfilesJson())
+
+        val targetRemotePrefs = FakeSharedPreferences()
+        val targetRepository = repository(
+            remotePrefs = targetRemotePrefs,
+            sdkInt = SignalBaselineTestFixtures.CURRENT_SDK + 1,
+            buildFingerprint = "other/build/fingerprint"
+        )
+
+        assertEquals(1, targetRepository.importSavedLocationProfilesJson(exportedJson))
+        assertEquals(listOf(sourceProfile), targetRepository.getSavedLocationProfiles())
+        assertFalse(targetRepository.saveSignalBaseline(sourceProfile.baseline))
+        assertNull(targetRemotePrefs.getString(KEY_SIGNAL_BASELINE_SNAPSHOT, null))
+    }
+
+    @Test
+    fun saveLocationProfile_afterDeviceBuildChangePreservesOlderProfiles() = runBlocking {
+        val localPrefs = FakeSharedPreferences()
+        val remotePrefs = FakeSharedPreferences()
+        val oldRepository = repository(
+            localPrefs = localPrefs,
+            remotePrefs = remotePrefs,
+            sdkInt = SignalBaselineTestFixtures.CURRENT_SDK,
+            buildFingerprint = SignalBaselineTestFixtures.CURRENT_BUILD
+        )
+        val oldProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = baselineForDevice(
+                sdkInt = SignalBaselineTestFixtures.CURRENT_SDK,
+                buildFingerprint = SignalBaselineTestFixtures.CURRENT_BUILD
+            ),
+            id = "old",
+            savedAtMillis = 1_000L,
+            label = "Old"
+        )
+        assertTrue(oldRepository.saveLocationProfile(oldProfile))
+
+        val newSdkInt = SignalBaselineTestFixtures.CURRENT_SDK + 1
+        val newBuildFingerprint = "other/build/fingerprint"
+        val newRepository = repository(
+            localPrefs = localPrefs,
+            remotePrefs = remotePrefs,
+            sdkInt = newSdkInt,
+            buildFingerprint = newBuildFingerprint
+        )
+        val newProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = baselineForDevice(
+                sdkInt = newSdkInt,
+                buildFingerprint = newBuildFingerprint
+            ),
+            id = "new",
+            savedAtMillis = 2_000L,
+            label = "New"
+        )
+
+        assertEquals(listOf(oldProfile), newRepository.getSavedLocationProfiles())
+        assertTrue(newRepository.saveLocationProfile(newProfile))
+        assertEquals(listOf(newProfile, oldProfile), newRepository.getSavedLocationProfiles())
+    }
+
+    @Test
+    fun importSavedLocationProfilesJson_rejectsArchiveWithOnlyInvalidProfilesWithoutOverwritingExistingProfiles() = runBlocking {
+        val repository = repository(FakeSharedPreferences())
+        val existingProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = SignalBaselineTestFixtures.validBaseline(),
+            id = "existing",
+            savedAtMillis = 1_000L,
+            label = "Existing"
+        )
+        val invalidProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = SignalBaselineTestFixtures.validBaseline().copy(
+                location = SignalBaselineTestFixtures.validBaseline().location.copy(latitude = 999.0)
+            ),
+            id = "invalid",
+            savedAtMillis = 2_000L,
+            label = "Invalid"
+        )
+        val invalidArchiveJson = gson.toJson(
+            SavedLocationProfileArchive(
+                schemaVersion = SavedLocationProfileCodec.SCHEMA_VERSION,
+                exportedAtMillis = 3_000L,
+                profiles = listOf(invalidProfile)
+            )
+        )
+
+        assertTrue(repository.saveLocationProfile(existingProfile))
+
+        assertNull(repository.importSavedLocationProfilesJson(invalidArchiveJson))
+        assertEquals(listOf(existingProfile), repository.getSavedLocationProfiles())
+    }
+
     private fun repository(
         remotePrefs: FakeSharedPreferences,
         sdkInt: Int = SignalBaselineTestFixtures.CURRENT_SDK,
         buildFingerprint: String = SignalBaselineTestFixtures.CURRENT_BUILD
     ): PreferencesRepository {
         return repository(MutableStateFlow<FakeSharedPreferences?>(remotePrefs), sdkInt, buildFingerprint)
+    }
+
+    private fun repository(
+        localPrefs: FakeSharedPreferences,
+        remotePrefs: FakeSharedPreferences,
+        sdkInt: Int = SignalBaselineTestFixtures.CURRENT_SDK,
+        buildFingerprint: String = SignalBaselineTestFixtures.CURRENT_BUILD
+    ): PreferencesRepository {
+        val remotePrefsState = MutableStateFlow<FakeSharedPreferences?>(remotePrefs)
+        return PreferencesRepository(
+            localPrefs = localPrefs,
+            remotePrefsProvider = { remotePrefsState.value },
+            remotePrefsState = remotePrefsState,
+            sdkIntProvider = { sdkInt },
+            buildFingerprintProvider = { buildFingerprint }
+        )
     }
 
     private fun repository(
@@ -193,5 +314,18 @@ class SignalBaselinePreferencesRepositoryTest {
 
     private fun FakeSharedPreferences.putBaselineJson(json: String) {
         edit().putString(KEY_SIGNAL_BASELINE_SNAPSHOT, json).apply()
+    }
+
+    private fun baselineForDevice(sdkInt: Int, buildFingerprint: String): SignalBaselineSnapshot {
+        return SignalBaselineTestFixtures.validBaseline(
+            cellInfo = listOf(
+                SignalBaselineTestFixtures.gsmCellInfoSnapshot(parcelBytes = null),
+                SignalBaselineTestFixtures.lteCellInfoSnapshot()
+            ),
+            neighboringCellInfo = emptyList()
+        ).copy(
+            captureSdkInt = sdkInt,
+            captureBuildFingerprint = buildFingerprint
+        )
     }
 }

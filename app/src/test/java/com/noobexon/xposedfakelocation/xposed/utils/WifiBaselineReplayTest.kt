@@ -8,6 +8,7 @@ import com.noobexon.xposedfakelocation.xposed.utils.WifiBaselineReplay.ScanResul
 import com.noobexon.xposedfakelocation.xposed.utils.WifiBaselineReplay.ScanResultsReturnKind
 import java.util.Base64
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -116,6 +117,22 @@ class WifiBaselineReplayTest {
         assertEquals(parcelBytes.size, scanReplay.values.single().parcelByteCount)
         assertEquals(SignalBaselineTestFixtures.CURRENT_SDK, scanReplay.values.single().parcelSdkInt)
         assertEquals(SignalBaselineTestFixtures.CURRENT_BUILD, scanReplay.values.single().parcelBuildFingerprint)
+    }
+
+    @Test
+    fun scanResultReplayRefreshesElapsedRealtimeTimestamp() {
+        val wifi = SignalBaselineTestFixtures.validBaseline().wifi
+        val scans = WifiBaselineReplay.scanResultsReplayResult(wifi)
+
+        val replayed = WifiBaselineReplay.replayScanResults(
+            result = scans,
+            timestampMicros = 9_876_543L
+        )
+
+        assertEquals(ScanResultsReplayKind.SAVED_BASELINE, scans.kind)
+        assertEquals(1, replayed.size)
+        assertEquals(9_876_543L, replayed.single().timestamp)
+        assertNotEquals(scans.values.single().timestampMicros, replayed.single().timestamp)
     }
 
     @Test

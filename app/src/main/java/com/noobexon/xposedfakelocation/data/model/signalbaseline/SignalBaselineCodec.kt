@@ -117,7 +117,25 @@ object SignalBaselineCodec {
         currentBuildFingerprint: String
     ): SignalBaselineValidationResult {
         return runCatching {
-            validateInternal(snapshot, currentSdkInt, currentBuildFingerprint)
+            validateInternal(
+                snapshot = snapshot,
+                currentSdkInt = currentSdkInt,
+                currentBuildFingerprint = currentBuildFingerprint,
+                requireCurrentDeviceCompatibility = true
+            )
+        }.getOrElse {
+            invalid("malformed_snapshot")
+        }
+    }
+
+    fun validateForArchive(snapshot: SignalBaselineSnapshot): SignalBaselineValidationResult {
+        return runCatching {
+            validateInternal(
+                snapshot = snapshot,
+                currentSdkInt = null,
+                currentBuildFingerprint = null,
+                requireCurrentDeviceCompatibility = false
+            )
         }.getOrElse {
             invalid("malformed_snapshot")
         }
@@ -125,16 +143,24 @@ object SignalBaselineCodec {
 
     private fun validateInternal(
         snapshot: SignalBaselineSnapshot,
-        currentSdkInt: Int,
-        currentBuildFingerprint: String
+        currentSdkInt: Int?,
+        currentBuildFingerprint: String?,
+        requireCurrentDeviceCompatibility: Boolean
     ): SignalBaselineValidationResult {
         if (snapshot.schemaVersion != SCHEMA_VERSION) return invalid("unsupported_schema")
         if (snapshot.capturedAtMillis <= 0L) return invalid("captured_at_invalid")
-        if (currentSdkInt <= 0 || snapshot.captureSdkInt <= 0) return invalid("sdk_invalid")
-        if (snapshot.captureSdkInt != currentSdkInt) return invalid("sdk_mismatch")
+        if (snapshot.captureSdkInt <= 0) return invalid("sdk_invalid")
+        if (requireCurrentDeviceCompatibility) {
+            if (currentSdkInt == null || currentSdkInt <= 0) return invalid("sdk_invalid")
+            if (snapshot.captureSdkInt != currentSdkInt) return invalid("sdk_mismatch")
+        }
         if (!isValidBuildFingerprint(snapshot.captureBuildFingerprint)) return invalid("capture_build_invalid")
-        if (!isValidBuildFingerprint(currentBuildFingerprint)) return invalid("current_build_invalid")
-        if (snapshot.captureBuildFingerprint != currentBuildFingerprint) return invalid("build_mismatch")
+        if (requireCurrentDeviceCompatibility) {
+            if (currentBuildFingerprint == null || !isValidBuildFingerprint(currentBuildFingerprint)) {
+                return invalid("current_build_invalid")
+            }
+            if (snapshot.captureBuildFingerprint != currentBuildFingerprint) return invalid("build_mismatch")
+        }
 
         validateLocation(snapshot.location)?.let { return invalid(it) }
         validateCellular(snapshot.cellular, snapshot.captureSdkInt, snapshot.captureBuildFingerprint)

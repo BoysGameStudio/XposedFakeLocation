@@ -55,7 +55,7 @@ object SavedLocationProfileCodec {
             .sortedByDescending(SavedLocationProfile::savedAtMillis)
             .take(MAX_PROFILE_COUNT)
 
-        if (normalizedProfiles.any(::hasInvalidStableFields)) return null
+        if (normalizedProfiles.any { !isValidProfile(it) }) return null
 
         return runCatching {
             gson.toJson(
@@ -68,11 +68,7 @@ object SavedLocationProfileCodec {
         }.getOrNull()
     }
 
-    fun parseProfiles(
-        json: String?,
-        currentSdkInt: Int,
-        currentBuildFingerprint: String
-    ): SavedLocationProfileParseResult {
+    fun parseProfiles(json: String?): SavedLocationProfileParseResult {
         if (json.isNullOrBlank()) return invalid("missing_json")
 
         return runCatching {
@@ -84,14 +80,15 @@ object SavedLocationProfileCodec {
             if (archive.schemaVersion != SCHEMA_VERSION) return invalid("unsupported_schema")
             if (archive.exportedAtMillis <= 0L) return invalid("exported_at_invalid")
 
-            val profiles = archive.profiles
-                .orEmpty()
+            val rawProfiles = archive.profiles.orEmpty()
+            val profiles = rawProfiles
                 .asSequence()
-                .filter { profile -> isValidProfile(profile, currentSdkInt, currentBuildFingerprint) }
+                .filter(::isValidProfile)
                 .distinctBy(SavedLocationProfile::id)
                 .sortedByDescending(SavedLocationProfile::savedAtMillis)
                 .take(MAX_PROFILE_COUNT)
                 .toList()
+            if (rawProfiles.isNotEmpty() && profiles.isEmpty()) return invalid("profiles_invalid")
 
             SavedLocationProfileParseResult(profiles = profiles)
         }.getOrElse {
@@ -99,18 +96,10 @@ object SavedLocationProfileCodec {
         }
     }
 
-    fun isValidProfile(
-        profile: SavedLocationProfile,
-        currentSdkInt: Int,
-        currentBuildFingerprint: String
-    ): Boolean {
+    fun isValidProfile(profile: SavedLocationProfile): Boolean {
         return runCatching {
             !hasInvalidStableFields(profile) &&
-                SignalBaselineCodec.validate(
-                    snapshot = profile.baseline,
-                    currentSdkInt = currentSdkInt,
-                    currentBuildFingerprint = currentBuildFingerprint
-                ).isValid
+                SignalBaselineCodec.validateForArchive(profile.baseline).isValid
         }.getOrDefault(false)
     }
 

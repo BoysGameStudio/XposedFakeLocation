@@ -177,6 +177,13 @@ class PreferencesRepository internal constructor(
     fun getSignalBaselineFlow(): Flow<SignalBaselineSnapshot?> = signalBaselineFlow()
 
     suspend fun saveSignalBaseline(snapshot: SignalBaselineSnapshot): Boolean {
+        val validation = SignalBaselineCodec.validate(
+            snapshot = snapshot,
+            currentSdkInt = sdkIntProvider(),
+            currentBuildFingerprint = buildFingerprintProvider()
+        )
+        if (!validation.isValid) return false
+
         val json = SignalBaselineCodec.encodeToJson(snapshot) ?: return false
         return editRemoteIfAvailable {
             putString(KEY_SIGNAL_BASELINE_SNAPSHOT, json)
@@ -373,11 +380,7 @@ class PreferencesRepository internal constructor(
     }
 
     suspend fun importSavedLocationProfilesJson(json: String): Int? {
-        val result = SavedLocationProfileCodec.parseProfiles(
-            json = json,
-            currentSdkInt = sdkIntProvider(),
-            currentBuildFingerprint = buildFingerprintProvider()
-        )
+        val result = SavedLocationProfileCodec.parseProfiles(json)
         if (!result.isValid) return null
 
         val currentProfilesById = getSavedLocationProfiles().associateBy(SavedLocationProfile::id)
@@ -400,11 +403,7 @@ class PreferencesRepository internal constructor(
     }
 
     private fun parseSavedLocationProfiles(json: String?): List<SavedLocationProfile> {
-        return SavedLocationProfileCodec.parseProfiles(
-            json = json,
-            currentSdkInt = sdkIntProvider(),
-            currentBuildFingerprint = buildFingerprintProvider()
-        ).profiles
+        return SavedLocationProfileCodec.parseProfiles(json).profiles
     }
 
     // region Broadcast Control (local)

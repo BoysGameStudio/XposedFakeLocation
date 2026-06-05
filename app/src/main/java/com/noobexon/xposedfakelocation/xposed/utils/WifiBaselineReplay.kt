@@ -7,6 +7,7 @@ import android.net.wifi.WifiInfo
 import android.os.Build
 import android.os.Parcel
 import android.os.Parcelable
+import android.os.SystemClock
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.ScanResultSnapshot
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.WifiBaselineSnapshot
@@ -49,10 +50,14 @@ object WifiBaselineReplay {
         }
     }
 
-    internal fun replayScanResults(result: ScanResultsReplayResult): List<ScanResult> {
+    internal fun replayScanResults(
+        result: ScanResultsReplayResult,
+        timestampMicros: Long? = null
+    ): List<ScanResult> {
         if (result.kind == ScanResultsReplayKind.EMPTY) return emptyList()
+        val replayTimestampMicros = timestampMicros ?: currentElapsedRealtimeMicros()
         return result.values.map { values ->
-            replayScanResultFromParcel(values) ?: ScanResult().apply {
+            (replayScanResultFromParcel(values) ?: ScanResult().apply {
                 SSID = values.ssid
                 BSSID = values.bssid
                 capabilities = values.capabilities
@@ -66,6 +71,8 @@ object WifiBaselineReplay {
                 values.is80211mcResponder?.let {
                     setBooleanFlagFieldIfPresent(SCAN_RESULT_FLAGS_FIELD, SCAN_RESULT_FLAG_80211MC_RESPONDER, it)
                 }
+            }).apply {
+                timestamp = replayTimestampMicros
             }
         }
     }
@@ -282,6 +289,8 @@ object WifiBaselineReplay {
         if (base64.length > maxBase64Chars) return null
         return runCatching { Base64.getDecoder().decode(base64) }.getOrNull()
     }
+
+    private fun currentElapsedRealtimeMicros(): Long = SystemClock.elapsedRealtimeNanos() / 1_000L
 
     private fun WifiInfo.applySavedWifiInfoFields(values: WifiConnectionReplayValues): WifiInfo {
         values.frequencyMhz?.let { setIntFieldIfPresent(WIFI_INFO_FREQUENCY_FIELD, it) }

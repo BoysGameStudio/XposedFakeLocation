@@ -84,6 +84,16 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val isFabClickable: Boolean
             get() = lastClickedLocation != null
+
+        val activeLocationProfileLabel: String?
+            get() {
+                val baseline = signalBaseline ?: return null
+                return savedLocationProfiles
+                    .firstOrNull { profile -> profile.baseline == baseline }
+                    ?.label
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+            }
     }
 
     // Private mutable state
@@ -457,15 +467,16 @@ internal class SignalBaselineMenuActions(
     }
 
     private suspend fun saveBaseline(snapshot: SignalBaselineSnapshot, profileLabel: String?): SignalBaselineToastMessage {
-        if (!baselineStore.saveSignalBaseline(snapshot)) {
-            return SignalBaselineToastMessage(R.string.toast_signal_baseline_save_failed)
-        }
         val profile = profileLabel
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
             ?.let { SavedLocationProfileCodec.createProfile(snapshot, label = it) }
             ?: SavedLocationProfileCodec.createProfile(snapshot)
         if (!baselineStore.saveLocationProfile(profile)) {
+            return SignalBaselineToastMessage(R.string.toast_signal_baseline_save_failed)
+        }
+        if (!baselineStore.saveSignalBaseline(snapshot)) {
+            baselineStore.removeLocationProfile(profile.id)
             return SignalBaselineToastMessage(R.string.toast_signal_baseline_save_failed)
         }
 
@@ -482,6 +493,7 @@ internal class SignalBaselineMenuActions(
 internal interface SignalBaselineStore {
     suspend fun saveSignalBaseline(snapshot: SignalBaselineSnapshot): Boolean
     suspend fun saveLocationProfile(profile: SavedLocationProfile): Boolean
+    suspend fun removeLocationProfile(id: String): Boolean
     suspend fun clearSignalBaseline(): Boolean
 }
 
@@ -494,6 +506,10 @@ private class PreferencesSignalBaselineStore(
 
     override suspend fun saveLocationProfile(profile: SavedLocationProfile): Boolean {
         return preferencesRepository.saveLocationProfile(profile)
+    }
+
+    override suspend fun removeLocationProfile(id: String): Boolean {
+        return preferencesRepository.removeSavedLocationProfile(id)
     }
 
     override suspend fun clearSignalBaseline(): Boolean {

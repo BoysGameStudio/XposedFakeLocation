@@ -13,6 +13,7 @@ import com.noobexon.xposedfakelocation.xposed.utils.CellularBaselineReplay.Neigh
 import com.noobexon.xposedfakelocation.xposed.utils.CellularBaselineReplay.ParcelReplayValidation
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,6 +30,7 @@ class CellularBaselineReplayTest {
     fun tearDown() {
         CellularBaselineReplay.currentSdkIntProvider = { 0 }
         CellularBaselineReplay.currentBuildFingerprintProvider = { "" }
+        CellularBaselineReplay.elapsedRealtimeNanosProvider = { 0L }
     }
 
     @Test
@@ -99,6 +101,26 @@ class CellularBaselineReplayTest {
     }
 
     @Test
+    fun applyReplayTimestampFields_refreshesKnownCellInfoTimestampFieldsInHierarchy() {
+        val target = TimestampFieldTarget()
+
+        assertTrue(CellularBaselineReplay.applyReplayTimestampFields(target, 9_876_543_210L))
+
+        assertEquals(9_876_543_210L, target.timestampNanos())
+        assertEquals(9_876L, target.timestampMillis())
+    }
+
+    @Test
+    fun applyReplayTimestampFields_rejectsInvalidElapsedRealtime() {
+        val target = TimestampFieldTarget()
+
+        assertFalse(CellularBaselineReplay.applyReplayTimestampFields(target, -1L))
+
+        assertEquals(123L, target.timestampNanos())
+        assertEquals(456L, target.timestampMillis())
+    }
+
+    @Test
     fun neighboringReplayDecision_prefersParcelAndAllowsTypedOnlyWhenEnoughFieldsExist() {
         val parcel = SignalBaselineTestFixtures.neighboringCellInfoSnapshot()
         val typedGsm = NeighboringCellInfoSnapshot(
@@ -145,6 +167,20 @@ class CellularBaselineReplayTest {
     fun missingBaselineFailsClosedToEmptyListsWithoutFrameworkConstruction() {
         assertTrue(CellularBaselineReplay.replayAllCellInfo(null).isEmpty())
         assertTrue(CellularBaselineReplay.replayNeighboringCellInfo(null).isEmpty())
+    }
+
+    private open class BaseTimestampFieldTarget {
+        @Suppress("unused")
+        private var mTimeStamp: Long = 123L
+
+        fun timestampNanos(): Long = mTimeStamp
+    }
+
+    private class TimestampFieldTarget : BaseTimestampFieldTarget() {
+        @Suppress("unused")
+        private var mTimestampMillis: Long = 456L
+
+        fun timestampMillis(): Long = mTimestampMillis
     }
 
 }

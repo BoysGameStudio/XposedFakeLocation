@@ -2,6 +2,7 @@ package com.noobexon.xposedfakelocation.manager.ui.map
 
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfile
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfileCodec
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
 import com.noobexon.xposedfakelocation.manager.baseline.SignalBaselineCapture
 import com.noobexon.xposedfakelocation.testutil.SignalBaselineTestFixtures
@@ -14,6 +15,56 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapViewModelSignalBaselineMenuTest {
+    @Test
+    fun mapUiState_activeLocationProfileLabelReturnsMatchingSavedProfileName() {
+        val activeBaseline = SignalBaselineTestFixtures.validBaseline()
+        val otherBaseline = activeBaseline.copy(
+            capturedAtMillis = activeBaseline.capturedAtMillis + 1,
+            location = activeBaseline.location.copy(latitude = 31.230416, longitude = 121.473701)
+        )
+        val matchingProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = activeBaseline,
+            id = "active",
+            savedAtMillis = 2_000L,
+            label = "  明天广场  "
+        )
+        val otherProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = otherBaseline,
+            id = "other",
+            savedAtMillis = 1_000L,
+            label = "Other"
+        )
+
+        val state = MapViewModel.MapUiState(
+            signalBaseline = activeBaseline,
+            savedLocationProfiles = listOf(otherProfile, matchingProfile)
+        )
+
+        assertEquals("明天广场", state.activeLocationProfileLabel)
+    }
+
+    @Test
+    fun mapUiState_activeLocationProfileLabelIsNullWhenNoSavedProfileMatches() {
+        val activeBaseline = SignalBaselineTestFixtures.validBaseline()
+        val otherBaseline = activeBaseline.copy(
+            capturedAtMillis = activeBaseline.capturedAtMillis + 1,
+            location = activeBaseline.location.copy(latitude = 31.230416, longitude = 121.473701)
+        )
+        val otherProfile = SavedLocationProfileCodec.createProfile(
+            snapshot = otherBaseline,
+            id = "other",
+            savedAtMillis = 1_000L,
+            label = "Other"
+        )
+
+        val state = MapViewModel.MapUiState(
+            signalBaseline = activeBaseline,
+            savedLocationProfiles = listOf(otherProfile)
+        )
+
+        assertNull(state.activeLocationProfileLabel)
+    }
+
     @Test
     fun saveRealEnvironmentBaseline_savesSnapshotAndReturnsCountOnlyToastMessage() = runBlocking {
         val baseline = SignalBaselineTestFixtures.validBaseline(
@@ -39,6 +90,48 @@ class MapViewModelSignalBaselineMenuTest {
         assertEquals(R.string.toast_signal_baseline_save_success, message.messageRes)
         assertEquals(listOf(2, 3), message.formatArgs)
         assertCountOnlyFormatArgs(message)
+    }
+
+    @Test
+    fun saveRealEnvironmentBaseline_profileFailureDoesNotWriteActiveBaseline() = runBlocking {
+        val baseline = SignalBaselineTestFixtures.validBaseline()
+        val store = FakeSignalBaselineStore(saveProfileResult = false)
+        val actions = actions(
+            store = store,
+            captureResult = SignalBaselineCapture.CaptureResult.Success(baseline)
+        )
+
+        val message = actions.saveRealEnvironmentBaseline("Office baseline")
+
+        assertEquals(0, store.saveCalls)
+        assertEquals(1, store.saveProfileCalls)
+        assertEquals(0, store.removeProfileCalls)
+        assertNull(store.savedBaseline)
+        assertTrue(store.savedProfiles.isEmpty())
+        assertEquals(R.string.toast_signal_baseline_save_failed, message.messageRes)
+    }
+
+    @Test
+    fun saveRealEnvironmentBaseline_activeFailureRemovesNewProfile() = runBlocking {
+        val existingBaseline = SignalBaselineTestFixtures.validBaseline()
+        val newBaseline = existingBaseline.copy(
+            capturedAtMillis = existingBaseline.capturedAtMillis + 1,
+            location = existingBaseline.location.copy(latitude = 31.230416, longitude = 121.473701)
+        )
+        val store = FakeSignalBaselineStore(savedBaseline = existingBaseline, saveResult = false)
+        val actions = actions(
+            store = store,
+            captureResult = SignalBaselineCapture.CaptureResult.Success(newBaseline)
+        )
+
+        val message = actions.saveRealEnvironmentBaseline("Office baseline")
+
+        assertEquals(1, store.saveCalls)
+        assertEquals(1, store.saveProfileCalls)
+        assertEquals(1, store.removeProfileCalls)
+        assertSame(existingBaseline, store.savedBaseline)
+        assertTrue(store.savedProfiles.isEmpty())
+        assertEquals(R.string.toast_signal_baseline_save_failed, message.messageRes)
     }
 
     @Test
@@ -121,11 +214,14 @@ class MapViewModelSignalBaselineMenuTest {
     private class FakeSignalBaselineStore(
         var savedBaseline: SignalBaselineSnapshot? = null,
         private val saveResult: Boolean = true,
+        private val saveProfileResult: Boolean = true,
         private val clearResult: Boolean = true
     ) : SignalBaselineStore {
         var saveCalls = 0
             private set
         var saveProfileCalls = 0
+            private set
+        var removeProfileCalls = 0
             private set
         var clearCalls = 0
             private set
@@ -139,8 +235,13 @@ class MapViewModelSignalBaselineMenuTest {
 
         override suspend fun saveLocationProfile(profile: SavedLocationProfile): Boolean {
             saveProfileCalls++
-            savedProfiles.add(profile)
-            return true
+            if (saveProfileResult) savedProfiles.add(profile)
+            return saveProfileResult
+        }
+
+        override suspend fun removeLocationProfile(id: String): Boolean {
+            removeProfileCalls++
+            return savedProfiles.removeAll { it.id == id }
         }
 
         override suspend fun clearSignalBaseline(): Boolean {
