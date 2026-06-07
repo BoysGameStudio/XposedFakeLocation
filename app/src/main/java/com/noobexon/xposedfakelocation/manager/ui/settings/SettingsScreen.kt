@@ -15,24 +15,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -372,67 +373,145 @@ fun SettingsScreen(
 }
 
 /**
- * Dropdown row for picking the app UI language.
+ * Language picker row. Shows the setting title and the currently selected language; tapping it
+ * opens a single-choice [LanguageSelectionDialog]. Selecting a language there applies it immediately
+ * and dismisses the dialog.
  *
- * @param selectedLanguage currently selected language, shown in the field.
- * @param onLanguageSelected invoked with the chosen option when the user picks an entry.
+ * @param selectedLanguage currently active language.
+ * @param onLanguageSelected invoked with the chosen option when the user picks one.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LanguageSettingItem(
     selectedLanguage: LanguageOption,
     onLanguageSelected: (LanguageOption) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
 
-    Column(
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(Dimensions.SPACING_SMALL)
+            .clickable { showDialog = true }
+            .padding(Dimensions.SPACING_MEDIUM)
     ) {
-        Text(
-            text = stringResource(R.string.setting_language_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = stringResource(R.string.setting_language_description),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
-        )
-        Spacer(modifier = Modifier.height(Dimensions.SPACING_SMALL))
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
-        ) {
-            OutlinedTextField(
-                value = stringResource(selectedLanguage.labelRes),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.setting_language_title)) },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.setting_language_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium
             )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                LanguageOption.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(option.labelRes)) },
-                        onClick = {
-                            expanded = false
-                            onLanguageSelected(option)
-                        }
-                    )
-                }
-            }
+            Text(
+                text = languageDisplayName(selectedLanguage),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
+            )
+        }
+
+        IconButton(onClick = { showDialog = true }) {
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = stringResource(R.string.cd_change_language),
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
+
+    if (showDialog) {
+        LanguageSelectionDialog(
+            selectedLanguage = selectedLanguage,
+            onLanguageSelected = {
+                onLanguageSelected(it)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false }
+        )
+    }
 }
+
+/**
+ * Single-choice language dialog. Lists every [LanguageOption] as a radio row showing the language
+ * in its own script (autonym) with the current-UI-language name as a subtitle when it differs;
+ * [LanguageOption.SYSTEM] shows what the device locale currently resolves to.
+ *
+ * @param selectedLanguage currently active language, pre-selected in the list.
+ * @param onLanguageSelected invoked with the option the user taps.
+ * @param onDismiss invoked when the dialog is dismissed without a selection.
+ */
+@Composable
+private fun LanguageSelectionDialog(
+    selectedLanguage: LanguageOption,
+    onLanguageSelected: (LanguageOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.setting_language_title)) },
+        text = {
+            Column(modifier = Modifier.selectableGroup()) {
+                LanguageOption.entries.forEach { option ->
+                    val selected = option == selectedLanguage
+                    val primary: String
+                    val secondary: String?
+                    if (option == LanguageOption.SYSTEM) {
+                        primary = stringResource(option.labelRes)
+                        secondary = LocaleController.systemLanguageAutonym()
+                    } else {
+                        val localized = stringResource(option.labelRes)
+                        primary = option.autonym ?: localized
+                        secondary = localized.takeUnless { it.equals(primary, ignoreCase = true) }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimensions.SPACING_MEDIUM),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = { onLanguageSelected(option) }
+                            )
+                            .padding(vertical = Dimensions.SPACING_SMALL)
+                    ) {
+                        RadioButton(
+                            selected = selected,
+                            onClick = null
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = primary,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            if (secondary != null) {
+                                Text(
+                                    text = secondary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+/** The display name shown for [option] in the collapsed language row (autonym, or system label). */
+@Composable
+private fun languageDisplayName(option: LanguageOption): String =
+    if (option == LanguageOption.SYSTEM) {
+        stringResource(option.labelRes)
+    } else {
+        option.autonym ?: stringResource(option.labelRes)
+    }
 
 /**
  * Section header: a bold colored [title] followed by a divider that fills the remaining width.

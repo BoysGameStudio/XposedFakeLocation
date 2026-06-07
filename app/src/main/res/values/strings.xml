@@ -16,6 +16,7 @@
 
     <string name="cd_back">Back</string>
     <string name="cd_navigate_back">Navigate back</string>
+    <string name="cd_change_language">Change language</string>
     <string name="cd_menu">Menu</string>
     <string name="cd_center">Center</string>
     <string name="cd_options">Options</string>
