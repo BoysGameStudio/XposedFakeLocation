@@ -210,8 +210,8 @@ fun SettingsScreen(
     val selectedLanguage = LanguageOption.fromTag(settingsViewModel.languageTag.collectAsStateWithLifecycle().value)
 
     val snackbarHostState = remember { SnackbarHostState() }
-    // null = hidden; true = hooks were enabled; false = hooks were disabled
-    var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) }
+
+    var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) } // null = hidden; true = hooks were enabled; false = hooks were disabled
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, settingsViewModel) {
