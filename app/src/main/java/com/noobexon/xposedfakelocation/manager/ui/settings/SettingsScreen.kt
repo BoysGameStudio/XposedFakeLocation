@@ -373,9 +373,10 @@ fun SettingsScreen(
 }
 
 /**
- * Language picker row. Shows the setting title and the currently selected language; tapping it
- * opens a single-choice [LanguageSelectionDialog]. Selecting a language there applies it immediately
- * and dismisses the dialog.
+ * Language picker row. Shows the setting title with an info tooltip on the left and the currently
+ * selected language plus an edit button on the right; tapping the row or the edit button opens a
+ * single-choice [LanguageSelectionDialog]. Selecting a language there applies it immediately and
+ * dismisses the dialog.
  *
  * @param selectedLanguage currently active language.
  * @param onLanguageSelected invoked with the chosen option when the user picks one.
@@ -386,33 +387,64 @@ private fun LanguageSettingItem(
     onLanguageSelected: (LanguageOption) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    var showTooltip by remember { mutableStateOf(false) }
+    val title = stringResource(R.string.setting_language_title)
+    val moreInfoDescription = stringResource(R.string.setting_more_info, title)
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { showDialog = true }
-            .padding(Dimensions.SPACING_MEDIUM)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showDialog = true }
+                .padding(Dimensions.SPACING_MEDIUM)
+        ) {
             Text(
-                text = stringResource(R.string.setting_language_title),
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium
             )
+
+            IconButton(
+                onClick = { showTooltip = !showTooltip },
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = moreInfoDescription,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
             Text(
                 text = languageDisplayName(selectedLanguage),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
+                modifier = Modifier.padding(start = Dimensions.SPACING_SMALL)
             )
+
+            IconButton(onClick = { showDialog = true }) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = stringResource(R.string.cd_change_language),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
-        IconButton(onClick = { showDialog = true }) {
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = stringResource(R.string.cd_change_language),
-                tint = MaterialTheme.colorScheme.primary
+        if (showTooltip) {
+            Text(
+                text = stringResource(R.string.setting_language_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(
+                    start = Dimensions.SPACING_MEDIUM,
+                    end = Dimensions.SPACING_MEDIUM,
+                    bottom = Dimensions.SPACING_MEDIUM
+                )
             )
         }
     }

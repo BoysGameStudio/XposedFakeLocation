@@ -55,7 +55,7 @@
     <string name="category_movement">移动</string>
 
     <string name="setting_language_title">应用语言</string>
-    <string name="setting_language_description">选择管理器应用和 Xposed toast 提示使用的语言。</string>
+    <string name="setting_language_description">更改管理器应用及其 Xposed toast 提示所使用的语言。</string>
     <string name="setting_hide_toast_title">隐藏“虚拟位置已启用”提示</string>
     <string name="setting_hide_toast_description">禁止在模块于目标应用中激活时显示 toast 提示</string>
     <string name="setting_external_broadcast_title">允许外部广播控制</string>

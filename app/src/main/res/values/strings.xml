@@ -55,7 +55,7 @@
     <string name="category_movement">Movement</string>
 
     <string name="setting_language_title">App language</string>
-    <string name="setting_language_description">Choose the language used by the manager app and Xposed toast message.</string>
+    <string name="setting_language_description">Changes the language used by the manager app and its Xposed toast messages.</string>
     <string name="setting_hide_toast_title">Hide \'Fake location active\' toast</string>
     <string name="setting_hide_toast_description">Suppresses the toast shown when the module activates in a target app</string>
     <string name="setting_external_broadcast_title">Allow external broadcast control</string>
