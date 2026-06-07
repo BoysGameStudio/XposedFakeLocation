@@ -56,6 +56,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -329,12 +330,14 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.padding(Dimensions.SPACING_SMALL)) {
                                 entries.forEachIndexed { index, entry ->
-                                    SettingEntryRow(entry)
-                                    if (index != entries.lastIndex) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(vertical = Dimensions.SPACING_SMALL),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                        )
+                                    key(entry.key) {
+                                        SettingEntryRow(entry)
+                                        if (index != entries.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(vertical = Dimensions.SPACING_SMALL),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -830,7 +833,7 @@ private fun NumericSettingItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { focusState ->
-                        if (!focusState.isFocused && text.toFloatOrNull() == null) {
+                        if (!focusState.isFocused) {
                             text = formatNumericValue(sliderValue, setting)
                         }
                     }
