@@ -372,6 +372,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
+     * Restores every spoofing preference to its default value. System hooks and language are
+     * intentionally left untouched: resetting system hooks would trigger an Xposed scope change
+     * (needs the service, may fail, prompts a reboot), and language is a UI preference whose reset
+     * would relaunch the activity. Each setter updates its flow optimistically, so the UI reflects
+     * the reset immediately.
+     */
+    fun resetToDefaults() {
+        setUseAccuracy(DEFAULT_USE_ACCURACY)
+        setAccuracy(DEFAULT_ACCURACY)
+        setUseAltitude(DEFAULT_USE_ALTITUDE)
+        setAltitude(DEFAULT_ALTITUDE)
+        setUseRandomize(DEFAULT_USE_RANDOMIZE)
+        setRandomizeRadius(DEFAULT_RANDOMIZE_RADIUS)
+        setUseVerticalAccuracy(DEFAULT_USE_VERTICAL_ACCURACY)
+        setVerticalAccuracy(DEFAULT_VERTICAL_ACCURACY)
+        setUseMeanSeaLevel(DEFAULT_USE_MEAN_SEA_LEVEL)
+        setMeanSeaLevel(DEFAULT_MEAN_SEA_LEVEL)
+        setUseMeanSeaLevelAccuracy(DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY)
+        setMeanSeaLevelAccuracy(DEFAULT_MEAN_SEA_LEVEL_ACCURACY)
+        setUseSpeed(DEFAULT_USE_SPEED)
+        setSpeed(DEFAULT_SPEED)
+        setUseSpeedAccuracy(DEFAULT_USE_SPEED_ACCURACY)
+        setSpeedAccuracy(DEFAULT_SPEED_ACCURACY)
+        setHideFakeLocationToast(DEFAULT_HIDE_FAKE_LOCATION_TOAST)
+        setEnableBroadcastControl(DEFAULT_ENABLE_BROADCAST_CONTROL)
+    }
+
+    /**
      * Adds (or removes) the system framework packages ([SYSTEM_HOOK_PACKAGES]) to the module scope.
      * The persisted [enableSystemHooks] toggle is only updated once the scope change succeeds, after
      * which the user is prompted to reboot. Progress and failures are reported through
