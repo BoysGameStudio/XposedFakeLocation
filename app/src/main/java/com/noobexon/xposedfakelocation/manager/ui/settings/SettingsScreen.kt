@@ -829,7 +829,7 @@ private fun NumericSettingItem(
                 label = { Text(label) },
                 suffix = { Text(unit) },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { focusState ->
