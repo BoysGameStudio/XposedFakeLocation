@@ -1,13 +1,13 @@
 package com.noobexon.xposedfakelocation.manager.ui.permissions
 
-import android.app.Activity
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.lifecycle.ViewModel
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
 
 class PermissionsViewModel : ViewModel() {
 
