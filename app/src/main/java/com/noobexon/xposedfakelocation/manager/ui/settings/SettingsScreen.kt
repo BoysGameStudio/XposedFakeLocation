@@ -26,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -351,7 +350,13 @@ private fun SettingsContent(
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
-                ) { focusManager.clearFocus() }
+                ) {
+                    focusManager.clearFocus()
+                    if (searchActive) {
+                        searchActive = false
+                        query = ""
+                    }
+                }
         ) {
             Column(
                 modifier = Modifier
@@ -655,13 +660,6 @@ private fun LanguageSettingItem(
                 modifier = Modifier.padding(start = Dimensions.SPACING_SMALL)
             )
 
-            IconButton(onClick = { showDialog = true }) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = stringResource(R.string.cd_change_language),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
         }
 
         if (showTooltip) {
