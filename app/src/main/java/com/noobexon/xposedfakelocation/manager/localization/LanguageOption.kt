@@ -8,12 +8,28 @@ import java.util.Locale
 private const val ENGLISH_LANGUAGE_TAG = "en"
 private const val CHINESE_LANGUAGE_TAG = "zh-CN"
 
+/**
+ * The set of UI languages the user can choose from in settings.
+ *
+ * Each entry pairs a BCP-47 [tag] (persisted via [LocaleController]) with a localized display
+ * [labelRes]. To add a language, declare a new entry with its tag and label string; the picker and
+ * [fromTag] lookup pick it up automatically.
+ *
+ * @property tag BCP-47 language tag, or [DEFAULT_LANGUAGE_TAG] (empty) for [SYSTEM] to follow the
+ * device locale.
+ * @property labelRes string resource for this language's name, shown in the current UI language.
+ */
 enum class LanguageOption(
     val tag: String,
     @StringRes val labelRes: Int
 ) {
+    /** Follow the device's system locale; carries the empty [DEFAULT_LANGUAGE_TAG]. */
     SYSTEM(DEFAULT_LANGUAGE_TAG, R.string.language_system),
+
+    /** English (`en`). */
     ENGLISH(ENGLISH_LANGUAGE_TAG, R.string.language_english),
+
+    /** Simplified Chinese (`zh-CN`). */
     CHINESE(CHINESE_LANGUAGE_TAG, R.string.language_chinese);
 
     /**
@@ -30,6 +46,12 @@ enum class LanguageOption(
         }
 
     companion object {
+        /**
+         * Returns the option whose [tag] matches [tag], falling back to [SYSTEM] for unknown or
+         * empty tags (so a removed/unrecognized persisted value degrades gracefully).
+         *
+         * @param tag a persisted BCP-47 language tag.
+         */
         fun fromTag(tag: String): LanguageOption {
             return entries.firstOrNull { it.tag == tag } ?: SYSTEM
         }
