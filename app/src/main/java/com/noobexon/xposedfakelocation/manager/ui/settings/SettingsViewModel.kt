@@ -45,16 +45,41 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** One-shot messages surfaced to the settings UI. */
+/**
+ * One-shot messages emitted while toggling system-level hooks, consumed once by the settings UI
+ * (e.g. shown as a snackbar or restart dialog). Delivered through a [kotlinx.coroutines.channels.Channel]
+ * so events are never dropped or replayed.
+ */
 sealed interface SystemHooksEvent {
-    /** The scope change succeeded; the user must reboot for it to take effect (or be undone). */
+    /**
+     * The scope change succeeded and the device must be rebooted for it to take effect (or be
+     * undone).
+     *
+     * @property enabled `true` if hooks were just enabled, `false` if they were disabled.
+     */
     data class RestartRequired(val enabled: Boolean) : SystemHooksEvent
+
+    /** The Xposed module is not active, so the scope cannot be changed. */
     data object ModuleNotActive : SystemHooksEvent
+
+    /**
+     * The scope request was rejected or threw.
+     *
+     * @property message Human-readable failure reason from the Xposed service.
+     */
     data class ScopeRequestFailed(val message: String) : SystemHooksEvent
 }
 
 private const val TAG = "SettingsViewModel"
 
+/**
+ * Backs the settings screen. Exposes every spoofing/preference value as a hot [StateFlow] for the
+ * UI to observe and a matching setter to mutate it, persisting through [PreferencesRepository].
+ *
+ * Most preferences are wrapped in a [Preference] holder that updates optimistically and then
+ * commits to disk. System-level hooks are special: they require an Xposed scope change that may
+ * fail or need a reboot, so their result is surfaced as one-shot [SystemHooksEvent]s.
+ */
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
 
@@ -62,6 +87,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * Holds a single preference as a hot [StateFlow]. [set] updates the value optimistically for
      * instant UI feedback and then persists it; the repository [flow] remains the source of truth
      * and re-emits the committed value.
+     *
+     * @param T the preference value type (e.g. [Boolean], [Double], [Float], [String]).
+     * @param initialValue value emitted until the repository's first value arrives.
+     * @param flow source-of-truth stream collected for the lifetime of the [SettingsViewModel].
+     * @param save suspending persistence call invoked on every [set].
      */
     private inner class Preference<T>(
         initialValue: T,
@@ -69,6 +99,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         private val save: suspend (T) -> Unit
     ) {
         private val _state = MutableStateFlow(initialValue)
+
+        /** The current value, observable by the UI. */
         val state: StateFlow<T> = _state.asStateFlow()
 
         init {
@@ -77,6 +109,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
+        /**
+         * Applies [value] immediately to [state], then persists it asynchronously. Persistence
+         * failures are logged (not surfaced) since the in-memory value already reflects the intent;
+         * cancellation is rethrown to respect structured concurrency.
+         */
         fun set(value: T) {
             _state.value = value
             viewModelScope.launch {
@@ -97,6 +134,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseAccuracyFlow(),
         preferencesRepository::saveUseAccuracy
     )
+
+    /** Whether the spoofed location reports a custom horizontal accuracy ([accuracy]). */
     val useAccuracy: StateFlow<Boolean> = _useAccuracy.state
 
     private val _accuracy = Preference(
@@ -104,6 +143,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getAccuracyFlow(),
         preferencesRepository::saveAccuracy
     )
+
+    /** Horizontal accuracy reported with the spoofed location, in meters. */
     val accuracy: StateFlow<Double> = _accuracy.state
 
     // Altitude
@@ -112,6 +153,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseAltitudeFlow(),
         preferencesRepository::saveUseAltitude
     )
+
+    /** Whether the spoofed location reports a custom [altitude]. */
     val useAltitude: StateFlow<Boolean> = _useAltitude.state
 
     private val _altitude = Preference(
@@ -119,6 +162,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getAltitudeFlow(),
         preferencesRepository::saveAltitude
     )
+
+    /** Altitude reported with the spoofed location, in meters above the WGS84 ellipsoid. */
     val altitude: StateFlow<Double> = _altitude.state
 
     // Randomize
@@ -127,6 +172,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseRandomizeFlow(),
         preferencesRepository::saveUseRandomize
     )
+
+    /** Whether each reported location is jittered within [randomizeRadius] of the chosen point. */
     val useRandomize: StateFlow<Boolean> = _useRandomize.state
 
     private val _randomizeRadius = Preference(
@@ -134,6 +181,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getRandomizeRadiusFlow(),
         preferencesRepository::saveRandomizeRadius
     )
+
+    /** Radius of the randomization circle around the chosen point, in meters. */
     val randomizeRadius: StateFlow<Double> = _randomizeRadius.state
 
     // Vertical Accuracy
@@ -142,6 +191,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseVerticalAccuracyFlow(),
         preferencesRepository::saveUseVerticalAccuracy
     )
+
+    /** Whether the spoofed location reports a custom [verticalAccuracy]. */
     val useVerticalAccuracy: StateFlow<Boolean> = _useVerticalAccuracy.state
 
     private val _verticalAccuracy = Preference(
@@ -149,6 +200,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getVerticalAccuracyFlow(),
         preferencesRepository::saveVerticalAccuracy
     )
+
+    /** Vertical (altitude) accuracy reported with the spoofed location, in meters. */
     val verticalAccuracy: StateFlow<Float> = _verticalAccuracy.state
 
     // Mean Sea Level
@@ -157,6 +210,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseMeanSeaLevelFlow(),
         preferencesRepository::saveUseMeanSeaLevel
     )
+
+    /** Whether the spoofed location reports a custom mean-sea-level altitude ([meanSeaLevel]). */
     val useMeanSeaLevel: StateFlow<Boolean> = _useMeanSeaLevel.state
 
     private val _meanSeaLevel = Preference(
@@ -164,6 +219,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getMeanSeaLevelFlow(),
         preferencesRepository::saveMeanSeaLevel
     )
+
+    /** Mean-sea-level altitude reported with the spoofed location, in meters. */
     val meanSeaLevel: StateFlow<Double> = _meanSeaLevel.state
 
     // Mean Sea Level Accuracy
@@ -172,6 +229,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseMeanSeaLevelAccuracyFlow(),
         preferencesRepository::saveUseMeanSeaLevelAccuracy
     )
+
+    /** Whether the spoofed location reports a custom [meanSeaLevelAccuracy]. */
     val useMeanSeaLevelAccuracy: StateFlow<Boolean> = _useMeanSeaLevelAccuracy.state
 
     private val _meanSeaLevelAccuracy = Preference(
@@ -179,6 +238,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getMeanSeaLevelAccuracyFlow(),
         preferencesRepository::saveMeanSeaLevelAccuracy
     )
+
+    /** Accuracy of the reported mean-sea-level altitude, in meters. */
     val meanSeaLevelAccuracy: StateFlow<Float> = _meanSeaLevelAccuracy.state
 
     // Speed
@@ -187,6 +248,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseSpeedFlow(),
         preferencesRepository::saveUseSpeed
     )
+
+    /** Whether the spoofed location reports a custom [speed]. */
     val useSpeed: StateFlow<Boolean> = _useSpeed.state
 
     private val _speed = Preference(
@@ -194,6 +257,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getSpeedFlow(),
         preferencesRepository::saveSpeed
     )
+
+    /** Speed reported with the spoofed location, in meters per second. */
     val speed: StateFlow<Float> = _speed.state
 
     // Speed Accuracy
@@ -202,6 +267,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseSpeedAccuracyFlow(),
         preferencesRepository::saveUseSpeedAccuracy
     )
+
+    /** Whether the spoofed location reports a custom [speedAccuracy]. */
     val useSpeedAccuracy: StateFlow<Boolean> = _useSpeedAccuracy.state
 
     private val _speedAccuracy = Preference(
@@ -209,6 +276,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getSpeedAccuracyFlow(),
         preferencesRepository::saveSpeedAccuracy
     )
+
+    /** Accuracy of the reported speed, in meters per second. */
     val speedAccuracy: StateFlow<Float> = _speedAccuracy.state
 
     // Hide Fake Location Toast
@@ -217,6 +286,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getHideFakeLocationToastFlow(),
         preferencesRepository::saveHideFakeLocationToast
     )
+
+    /** Whether the per-fix toast shown by the hook when a fake location is served is suppressed. */
     val hideFakeLocationToast: StateFlow<Boolean> = _hideFakeLocationToast.state
 
     // External Broadcast Control
@@ -225,14 +296,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getEnableBroadcastControlFlow(),
         preferencesRepository::saveEnableBroadcastControl
     )
+
+    /**
+     * Whether the external broadcast [ControlReceiver] is enabled, allowing other apps/ADB to
+     * control spoofing via broadcasts. Kept in sync with the receiver's manifest state by
+     * [setEnableBroadcastControl].
+     */
     val enableBroadcastControl: StateFlow<Boolean> = _enableBroadcastControl.state
 
-    // System-Level Hooks (state mirrors the persisted pref; the switch only flips
-    // once the scope change actually succeeds).
+    /**
+     * Whether the system framework packages are in the module's hook scope. Mirrors the persisted
+     * preference, which is only updated once a scope change actually succeeds (see
+     * [setEnableSystemHooks]), so the switch never flips optimistically.
+     */
     val enableSystemHooks: StateFlow<Boolean> = preferencesRepository.getEnableSystemHooksFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_ENABLE_SYSTEM_HOOKS)
 
     private val _systemHooksEvents = Channel<SystemHooksEvent>(Channel.BUFFERED)
+
+    /** Stream of one-shot [SystemHooksEvent]s produced by [setEnableSystemHooks]. */
     val systemHooksEvents: Flow<SystemHooksEvent> = _systemHooksEvents.receiveAsFlow()
 
     // Language
@@ -241,9 +323,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getLanguageTagFlow(),
         preferencesRepository::saveLanguageTag
     )
+
+    /** BCP-47 language tag of the selected UI language, or empty to follow the system locale. */
     val languageTag: StateFlow<String> = _languageTag.state
 
-    // Setter methods for all preferences
+    // Setters for the preferences above. Each updates its StateFlow optimistically and persists the
+    // value (see Preference.set); the parameter unit/semantics match the documented flow of the
+    // same name. enableBroadcastControl and enableSystemHooks have dedicated setters below.
     fun setUseAccuracy(value: Boolean) = _useAccuracy.set(value)
     fun setAccuracy(value: Double) = _accuracy.set(value)
     fun setUseAltitude(value: Boolean) = _useAltitude.set(value)
@@ -266,6 +352,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     /**
      * Persists the broadcast-control toggle and enables/disables the [ControlReceiver] manifest
      * component in lockstep, so the stored flag and the receiver's exported state never diverge.
+     *
+     * @param value `true` to enable external broadcast control, `false` to disable it.
      */
     fun setEnableBroadcastControl(value: Boolean) {
         _enableBroadcastControl.set(value)
@@ -284,8 +372,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
-     * Adds (or removes) the system framework packages to the module scope. The persisted toggle is
-     * only updated once the scope change succeeds, after which the user is prompted to reboot.
+     * Adds (or removes) the system framework packages ([SYSTEM_HOOK_PACKAGES]) to the module scope.
+     * The persisted [enableSystemHooks] toggle is only updated once the scope change succeeds, after
+     * which the user is prompted to reboot. Progress and failures are reported through
+     * [systemHooksEvents]; if the module is inactive a [SystemHooksEvent.ModuleNotActive] is emitted
+     * and no change is made.
+     *
+     * @param enabled `true` to request the system scope, `false` to remove it.
      */
     fun setEnableSystemHooks(enabled: Boolean) {
         val service = App.service

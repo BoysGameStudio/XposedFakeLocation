@@ -71,6 +71,7 @@ import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
 import com.noobexon.xposedfakelocation.manager.localization.LocaleController
 
+/** Shared spacing and card styling constants for the settings screen. */
 private object Dimensions {
     val SPACING_EXTRA_SMALL = 4.dp
     val SPACING_SMALL = 8.dp
@@ -86,6 +87,14 @@ private object Dimensions {
  * value and its setter are resolved at the call site from [SettingsViewModel] (see
  * [NumericSettingsSections]); the UI layer works uniformly in [Float] and converts back to the
  * persisted type in the setter lambda.
+ *
+ * @property titleRes title shown next to the enable switch.
+ * @property descriptionRes help text shown when the info icon is tapped.
+ * @property labelRes short label prefixed to the formatted value.
+ * @property unit unit suffix appended to the value (e.g. `"m"`, `"m/s"`).
+ * @property min inclusive lower bound of the slider and stepper.
+ * @property max inclusive upper bound of the slider and stepper.
+ * @property step increment applied by the +/- buttons and slider tick spacing.
  */
 private enum class NumericSetting(
     @StringRes val titleRes: Int,
@@ -146,7 +155,12 @@ private enum class NumericSetting(
     )
 }
 
-/** Groups [NumericSetting]s under a localized category header, in display order. */
+/**
+ * Groups [NumericSetting]s under a localized category header, in display order.
+ *
+ * @property titleRes localized category header title.
+ * @property settings settings rendered under this category, top to bottom.
+ */
 private enum class SettingCategory(
     @StringRes val titleRes: Int,
     val settings: List<NumericSetting>
@@ -176,6 +190,14 @@ private enum class SettingCategory(
     )
 }
 
+/**
+ * Top-level settings screen. Renders language, notification, external-control, system-hook and
+ * numeric spoofing sections, all backed by [settingsViewModel]. Collects one-shot
+ * [SystemHooksEvent]s (lifecycle-aware) to show a snackbar or the reboot-required dialog.
+ *
+ * @param navController used to navigate back from the top app bar.
+ * @param settingsViewModel state holder for all settings; defaults to the screen-scoped instance.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -349,6 +371,12 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * Dropdown row for picking the app UI language.
+ *
+ * @param selectedLanguage currently selected language, shown in the field.
+ * @param onLanguageSelected invoked with the chosen option when the user picks an entry.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LanguageSettingItem(
@@ -406,6 +434,11 @@ private fun LanguageSettingItem(
     }
 }
 
+/**
+ * Section header: a bold colored [title] followed by a divider that fills the remaining width.
+ *
+ * @param title localized header text.
+ */
 @Composable
 private fun CategoryHeader(title: String) {
     Row(
@@ -431,6 +464,15 @@ private fun CategoryHeader(title: String) {
     }
 }
 
+/**
+ * A single on/off setting row: a [title] with an info button that reveals [description], plus a
+ * trailing switch.
+ *
+ * @param title localized setting name.
+ * @param description help text toggled by the info icon.
+ * @param checked current switch state.
+ * @param onCheckedChange invoked with the new state when the switch is toggled.
+ */
 @Composable
 private fun BooleanSettingItem(
     title: String,
@@ -614,6 +656,20 @@ private fun NumericSettingsSections(viewModel: SettingsViewModel) {
     }
 }
 
+/**
+ * A single numeric setting row driven by [setting]'s static metadata. Shows an enable switch and,
+ * when enabled, a formatted value with +/- steppers and a slider bounded by [NumericSetting.min]
+ * /[NumericSetting.max].
+ *
+ * The slider tracks an internal [Float] that mirrors [value] (kept in sync via [LaunchedEffect]),
+ * committing the final value through [onValueChange] on stepper taps and slider release.
+ *
+ * @param setting static metadata (titles, unit, range, step) for this row.
+ * @param useValue whether this setting is currently enabled.
+ * @param onUseValueChange invoked when the enable switch is toggled.
+ * @param value current committed value, in [setting]'s unit.
+ * @param onValueChange invoked with the new value when the user adjusts it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NumericSettingItem(
