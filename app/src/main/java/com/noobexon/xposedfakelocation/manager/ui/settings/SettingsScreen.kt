@@ -1,8 +1,6 @@
 package com.noobexon.xposedfakelocation.manager.ui.settings
 
 import android.app.Activity
-import android.content.ComponentName
-import android.content.pm.PackageManager
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -63,11 +61,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
-import com.noobexon.xposedfakelocation.manager.control.ControlReceiver
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
 import com.noobexon.xposedfakelocation.manager.localization.LocaleController
 
@@ -191,14 +191,17 @@ fun SettingsScreen(
     // null = hidden; true = hooks were enabled; false = hooks were disabled
     var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) }
 
-    LaunchedEffect(Unit) {
-        settingsViewModel.systemHooksEvents.collect { event ->
-            when (event) {
-                is SystemHooksEvent.RestartRequired -> restartDialogEnabled = event.enabled
-                is SystemHooksEvent.ModuleNotActive ->
-                    snackbarHostState.showSnackbar(context.getString(R.string.system_hooks_module_inactive))
-                is SystemHooksEvent.ScopeRequestFailed ->
-                    snackbarHostState.showSnackbar(context.getString(R.string.system_hooks_scope_failed, event.message))
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, settingsViewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            settingsViewModel.systemHooksEvents.collect { event ->
+                when (event) {
+                    is SystemHooksEvent.RestartRequired -> restartDialogEnabled = event.enabled
+                    is SystemHooksEvent.ModuleNotActive ->
+                        snackbarHostState.showSnackbar(context.getString(R.string.system_hooks_module_inactive))
+                    is SystemHooksEvent.ScopeRequestFailed ->
+                        snackbarHostState.showSnackbar(context.getString(R.string.system_hooks_scope_failed, event.message))
+                }
             }
         }
     }
@@ -293,10 +296,7 @@ fun SettingsScreen(
                             title = stringResource(R.string.setting_external_broadcast_title),
                             description = stringResource(R.string.setting_external_broadcast_description),
                             checked = settingsViewModel.enableBroadcastControl.collectAsStateWithLifecycle().value,
-                            onCheckedChange = { newValue ->
-                                settingsViewModel.setEnableBroadcastControl(newValue)
-                                setControlReceiverEnabled(context, newValue)
-                            }
+                            onCheckedChange = settingsViewModel::setEnableBroadcastControl
                         )
                     }
                 }
@@ -406,22 +406,8 @@ private fun LanguageSettingItem(
     }
 }
 
-private fun setControlReceiverEnabled(context: android.content.Context, enabled: Boolean) {
-    val component = ComponentName(context, ControlReceiver::class.java)
-    val newState = if (enabled) {
-        PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-    } else {
-        PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-    }
-    context.packageManager.setComponentEnabledSetting(
-        component,
-        newState,
-        PackageManager.DONT_KILL_APP
-    )
-}
-
 @Composable
-fun CategoryHeader(title: String) {
+private fun CategoryHeader(title: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -446,7 +432,7 @@ fun CategoryHeader(title: String) {
 }
 
 @Composable
-fun BooleanSettingItem(
+private fun BooleanSettingItem(
     title: String,
     description: String,
     checked: Boolean,
@@ -710,7 +696,6 @@ private fun NumericSettingItem(
             Spacer(modifier = Modifier.height(Dimensions.SPACING_MEDIUM))
 
             var sliderValue by remember { mutableFloatStateOf(value) }
-            var showExactValue by remember { mutableStateOf(false) }
 
             LaunchedEffect(value) {
                 if (sliderValue != value) sliderValue = value
@@ -730,9 +715,7 @@ private fun NumericSettingItem(
                 Text(
                     text = displayText,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { showExactValue = !showExactValue }
+                    modifier = Modifier.weight(1f)
                 )
 
                 OutlinedIconButton(

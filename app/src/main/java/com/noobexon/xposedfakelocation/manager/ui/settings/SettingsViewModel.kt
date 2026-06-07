@@ -2,6 +2,9 @@
 package com.noobexon.xposedfakelocation.manager.ui.settings
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
@@ -27,16 +30,17 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.SYSTEM_HOOK_PACKAGES
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
 import com.noobexon.xposedfakelocation.manager.App
+import com.noobexon.xposedfakelocation.manager.control.ControlReceiver
 import io.github.libxposed.service.XposedService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,18 +53,23 @@ sealed interface SystemHooksEvent {
     data class ScopeRequestFailed(val message: String) : SystemHooksEvent
 }
 
+private const val TAG = "SettingsViewModel"
+
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
 
-    // Generic state holders for different types of preferences
-    private class BooleanPreference(
-        initialValue: Boolean,
-        private val flow: Flow<Boolean>,
-        private val saveOperation: suspend (Boolean) -> Unit,
-        private val viewModelScope: kotlinx.coroutines.CoroutineScope
+    /**
+     * Holds a single preference as a hot [StateFlow]. [set] updates the value optimistically for
+     * instant UI feedback and then persists it; the repository [flow] remains the source of truth
+     * and re-emits the committed value.
+     */
+    private inner class Preference<T>(
+        initialValue: T,
+        flow: Flow<T>,
+        private val save: suspend (T) -> Unit
     ) {
         private val _state = MutableStateFlow(initialValue)
-        val state: StateFlow<Boolean> = _state.asStateFlow()
+        val state: StateFlow<T> = _state.asStateFlow()
 
         init {
             viewModelScope.launch {
@@ -68,290 +77,211 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        fun setValue(value: Boolean) {
+        fun set(value: T) {
             _state.value = value
             viewModelScope.launch {
                 try {
-                    saveOperation(value)
+                    save(value)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    // Add error handling if needed
+                    Log.e(TAG, "Failed to persist preference value: $value", e)
                 }
             }
         }
     }
 
-    private class DoublePreference(
-        initialValue: Double,
-        private val flow: Flow<Double>,
-        private val saveOperation: suspend (Double) -> Unit,
-        private val viewModelScope: kotlinx.coroutines.CoroutineScope
-    ) {
-        private val _state = MutableStateFlow(initialValue)
-        val state: StateFlow<Double> = _state.asStateFlow()
-
-        init {
-            viewModelScope.launch {
-                flow.collect { _state.value = it }
-            }
-        }
-
-        fun setValue(value: Double) {
-            _state.value = value
-            viewModelScope.launch {
-                try {
-                    saveOperation(value)
-                } catch (e: Exception) {
-                    // Add error handling if needed
-                }
-            }
-        }
-    }
-
-    private class FloatPreference(
-        initialValue: Float,
-        private val flow: Flow<Float>,
-        private val saveOperation: suspend (Float) -> Unit,
-        private val viewModelScope: kotlinx.coroutines.CoroutineScope
-    ) {
-        private val _state = MutableStateFlow(initialValue)
-        val state: StateFlow<Float> = _state.asStateFlow()
-
-        init {
-            viewModelScope.launch {
-                flow.collect { _state.value = it }
-            }
-        }
-
-        fun setValue(value: Float) {
-            _state.value = value
-            viewModelScope.launch {
-                try {
-                    saveOperation(value)
-                } catch (e: Exception) {
-                    // Add error handling if needed
-                }
-            }
-        }
-    }
-
-    private class StringPreference(
-        initialValue: String,
-        private val flow: Flow<String>,
-        private val saveOperation: suspend (String) -> Unit,
-        private val viewModelScope: kotlinx.coroutines.CoroutineScope
-    ) {
-        private val _state = MutableStateFlow(initialValue)
-        val state: StateFlow<String> = _state.asStateFlow()
-
-        init {
-            viewModelScope.launch {
-                flow.collect { _state.value = it }
-            }
-        }
-
-        fun setValue(value: String) {
-            _state.value = value
-            viewModelScope.launch {
-                try {
-                    saveOperation(value)
-                } catch (e: Exception) {
-                    // Add error handling if needed
-                }
-            }
-        }
-    }
-
-    // Preferences for Accuracy
-    private val _useAccuracyPreference = BooleanPreference(
+    // Accuracy
+    private val _useAccuracy = Preference(
         DEFAULT_USE_ACCURACY,
         preferencesRepository.getUseAccuracyFlow(),
-        preferencesRepository::saveUseAccuracy,
-        viewModelScope
+        preferencesRepository::saveUseAccuracy
     )
-    val useAccuracy: StateFlow<Boolean> = _useAccuracyPreference.state
+    val useAccuracy: StateFlow<Boolean> = _useAccuracy.state
 
-    private val _accuracyPreference = DoublePreference(
+    private val _accuracy = Preference(
         DEFAULT_ACCURACY,
         preferencesRepository.getAccuracyFlow(),
-        preferencesRepository::saveAccuracy,
-        viewModelScope
+        preferencesRepository::saveAccuracy
     )
-    val accuracy: StateFlow<Double> = _accuracyPreference.state
+    val accuracy: StateFlow<Double> = _accuracy.state
 
-    // Preferences for Altitude
-    private val _useAltitudePreference = BooleanPreference(
+    // Altitude
+    private val _useAltitude = Preference(
         DEFAULT_USE_ALTITUDE,
         preferencesRepository.getUseAltitudeFlow(),
-        preferencesRepository::saveUseAltitude,
-        viewModelScope
+        preferencesRepository::saveUseAltitude
     )
-    val useAltitude: StateFlow<Boolean> = _useAltitudePreference.state
+    val useAltitude: StateFlow<Boolean> = _useAltitude.state
 
-    private val _altitudePreference = DoublePreference(
+    private val _altitude = Preference(
         DEFAULT_ALTITUDE,
         preferencesRepository.getAltitudeFlow(),
-        preferencesRepository::saveAltitude,
-        viewModelScope
+        preferencesRepository::saveAltitude
     )
-    val altitude: StateFlow<Double> = _altitudePreference.state
+    val altitude: StateFlow<Double> = _altitude.state
 
-    // Preferences for Randomize
-    private val _useRandomizePreference = BooleanPreference(
+    // Randomize
+    private val _useRandomize = Preference(
         DEFAULT_USE_RANDOMIZE,
         preferencesRepository.getUseRandomizeFlow(),
-        preferencesRepository::saveUseRandomize,
-        viewModelScope
+        preferencesRepository::saveUseRandomize
     )
-    val useRandomize: StateFlow<Boolean> = _useRandomizePreference.state
+    val useRandomize: StateFlow<Boolean> = _useRandomize.state
 
-    private val _randomizeRadiusPreference = DoublePreference(
+    private val _randomizeRadius = Preference(
         DEFAULT_RANDOMIZE_RADIUS,
         preferencesRepository.getRandomizeRadiusFlow(),
-        preferencesRepository::saveRandomizeRadius,
-        viewModelScope
+        preferencesRepository::saveRandomizeRadius
     )
-    val randomizeRadius: StateFlow<Double> = _randomizeRadiusPreference.state
+    val randomizeRadius: StateFlow<Double> = _randomizeRadius.state
 
-    // Preferences for Vertical Accuracy
-    private val _useVerticalAccuracyPreference = BooleanPreference(
+    // Vertical Accuracy
+    private val _useVerticalAccuracy = Preference(
         DEFAULT_USE_VERTICAL_ACCURACY,
         preferencesRepository.getUseVerticalAccuracyFlow(),
-        preferencesRepository::saveUseVerticalAccuracy,
-        viewModelScope
+        preferencesRepository::saveUseVerticalAccuracy
     )
-    val useVerticalAccuracy: StateFlow<Boolean> = _useVerticalAccuracyPreference.state
+    val useVerticalAccuracy: StateFlow<Boolean> = _useVerticalAccuracy.state
 
-    private val _verticalAccuracyPreference = FloatPreference(
+    private val _verticalAccuracy = Preference(
         DEFAULT_VERTICAL_ACCURACY,
         preferencesRepository.getVerticalAccuracyFlow(),
-        preferencesRepository::saveVerticalAccuracy,
-        viewModelScope
+        preferencesRepository::saveVerticalAccuracy
     )
-    val verticalAccuracy: StateFlow<Float> = _verticalAccuracyPreference.state
+    val verticalAccuracy: StateFlow<Float> = _verticalAccuracy.state
 
-    // Preferences for Mean Sea Level
-    private val _useMeanSeaLevelPreference = BooleanPreference(
+    // Mean Sea Level
+    private val _useMeanSeaLevel = Preference(
         DEFAULT_USE_MEAN_SEA_LEVEL,
         preferencesRepository.getUseMeanSeaLevelFlow(),
-        preferencesRepository::saveUseMeanSeaLevel,
-        viewModelScope
+        preferencesRepository::saveUseMeanSeaLevel
     )
-    val useMeanSeaLevel: StateFlow<Boolean> = _useMeanSeaLevelPreference.state
+    val useMeanSeaLevel: StateFlow<Boolean> = _useMeanSeaLevel.state
 
-    private val _meanSeaLevelPreference = DoublePreference(
+    private val _meanSeaLevel = Preference(
         DEFAULT_MEAN_SEA_LEVEL,
         preferencesRepository.getMeanSeaLevelFlow(),
-        preferencesRepository::saveMeanSeaLevel,
-        viewModelScope
+        preferencesRepository::saveMeanSeaLevel
     )
-    val meanSeaLevel: StateFlow<Double> = _meanSeaLevelPreference.state
+    val meanSeaLevel: StateFlow<Double> = _meanSeaLevel.state
 
-    // Preferences for Mean Sea Level Accuracy
-    private val _useMeanSeaLevelAccuracyPreference = BooleanPreference(
+    // Mean Sea Level Accuracy
+    private val _useMeanSeaLevelAccuracy = Preference(
         DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY,
         preferencesRepository.getUseMeanSeaLevelAccuracyFlow(),
-        preferencesRepository::saveUseMeanSeaLevelAccuracy,
-        viewModelScope
+        preferencesRepository::saveUseMeanSeaLevelAccuracy
     )
-    val useMeanSeaLevelAccuracy: StateFlow<Boolean> = _useMeanSeaLevelAccuracyPreference.state
+    val useMeanSeaLevelAccuracy: StateFlow<Boolean> = _useMeanSeaLevelAccuracy.state
 
-    private val _meanSeaLevelAccuracyPreference = FloatPreference(
+    private val _meanSeaLevelAccuracy = Preference(
         DEFAULT_MEAN_SEA_LEVEL_ACCURACY,
         preferencesRepository.getMeanSeaLevelAccuracyFlow(),
-        preferencesRepository::saveMeanSeaLevelAccuracy,
-        viewModelScope
+        preferencesRepository::saveMeanSeaLevelAccuracy
     )
-    val meanSeaLevelAccuracy: StateFlow<Float> = _meanSeaLevelAccuracyPreference.state
+    val meanSeaLevelAccuracy: StateFlow<Float> = _meanSeaLevelAccuracy.state
 
-    // Preferences for Speed
-    private val _useSpeedPreference = BooleanPreference(
+    // Speed
+    private val _useSpeed = Preference(
         DEFAULT_USE_SPEED,
         preferencesRepository.getUseSpeedFlow(),
-        preferencesRepository::saveUseSpeed,
-        viewModelScope
+        preferencesRepository::saveUseSpeed
     )
-    val useSpeed: StateFlow<Boolean> = _useSpeedPreference.state
+    val useSpeed: StateFlow<Boolean> = _useSpeed.state
 
-    private val _speedPreference = FloatPreference(
+    private val _speed = Preference(
         DEFAULT_SPEED,
         preferencesRepository.getSpeedFlow(),
-        preferencesRepository::saveSpeed,
-        viewModelScope
+        preferencesRepository::saveSpeed
     )
-    val speed: StateFlow<Float> = _speedPreference.state
+    val speed: StateFlow<Float> = _speed.state
 
-    // Preferences for Speed Accuracy
-    private val _useSpeedAccuracyPreference = BooleanPreference(
+    // Speed Accuracy
+    private val _useSpeedAccuracy = Preference(
         DEFAULT_USE_SPEED_ACCURACY,
         preferencesRepository.getUseSpeedAccuracyFlow(),
-        preferencesRepository::saveUseSpeedAccuracy,
-        viewModelScope
+        preferencesRepository::saveUseSpeedAccuracy
     )
-    val useSpeedAccuracy: StateFlow<Boolean> = _useSpeedAccuracyPreference.state
+    val useSpeedAccuracy: StateFlow<Boolean> = _useSpeedAccuracy.state
 
-    private val _speedAccuracyPreference = FloatPreference(
+    private val _speedAccuracy = Preference(
         DEFAULT_SPEED_ACCURACY,
         preferencesRepository.getSpeedAccuracyFlow(),
-        preferencesRepository::saveSpeedAccuracy,
-        viewModelScope
+        preferencesRepository::saveSpeedAccuracy
     )
-    val speedAccuracy: StateFlow<Float> = _speedAccuracyPreference.state
+    val speedAccuracy: StateFlow<Float> = _speedAccuracy.state
 
-    // Preferences for Hide Fake Location Toast
-    private val _hideFakeLocationToastPreference = BooleanPreference(
+    // Hide Fake Location Toast
+    private val _hideFakeLocationToast = Preference(
         DEFAULT_HIDE_FAKE_LOCATION_TOAST,
         preferencesRepository.getHideFakeLocationToastFlow(),
-        preferencesRepository::saveHideFakeLocationToast,
-        viewModelScope
+        preferencesRepository::saveHideFakeLocationToast
     )
-    val hideFakeLocationToast: StateFlow<Boolean> = _hideFakeLocationToastPreference.state
+    val hideFakeLocationToast: StateFlow<Boolean> = _hideFakeLocationToast.state
 
-    // Preference for External Broadcast Control
-    private val _enableBroadcastControlPreference = BooleanPreference(
+    // External Broadcast Control
+    private val _enableBroadcastControl = Preference(
         DEFAULT_ENABLE_BROADCAST_CONTROL,
         preferencesRepository.getEnableBroadcastControlFlow(),
-        preferencesRepository::saveEnableBroadcastControl,
-        viewModelScope
+        preferencesRepository::saveEnableBroadcastControl
     )
-    val enableBroadcastControl: StateFlow<Boolean> = _enableBroadcastControlPreference.state
+    val enableBroadcastControl: StateFlow<Boolean> = _enableBroadcastControl.state
 
-    // Preference for System-Level Hooks (state mirrors the persisted pref; the switch only flips
+    // System-Level Hooks (state mirrors the persisted pref; the switch only flips
     // once the scope change actually succeeds).
     val enableSystemHooks: StateFlow<Boolean> = preferencesRepository.getEnableSystemHooksFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_ENABLE_SYSTEM_HOOKS)
 
-    private val _systemHooksEvents = MutableSharedFlow<SystemHooksEvent>(extraBufferCapacity = 1)
-    val systemHooksEvents: SharedFlow<SystemHooksEvent> = _systemHooksEvents.asSharedFlow()
+    private val _systemHooksEvents = Channel<SystemHooksEvent>(Channel.BUFFERED)
+    val systemHooksEvents: Flow<SystemHooksEvent> = _systemHooksEvents.receiveAsFlow()
 
-    // Preference for Language
-    private val _languageTagPreference = StringPreference(
+    // Language
+    private val _languageTag = Preference(
         DEFAULT_LANGUAGE_TAG,
         preferencesRepository.getLanguageTagFlow(),
-        preferencesRepository::saveLanguageTag,
-        viewModelScope
+        preferencesRepository::saveLanguageTag
     )
-    val languageTag: StateFlow<String> = _languageTagPreference.state
+    val languageTag: StateFlow<String> = _languageTag.state
 
     // Setter methods for all preferences
-    fun setUseAccuracy(value: Boolean) = _useAccuracyPreference.setValue(value)
-    fun setAccuracy(value: Double) = _accuracyPreference.setValue(value)
-    fun setUseAltitude(value: Boolean) = _useAltitudePreference.setValue(value)
-    fun setAltitude(value: Double) = _altitudePreference.setValue(value)
-    fun setUseRandomize(value: Boolean) = _useRandomizePreference.setValue(value)
-    fun setRandomizeRadius(value: Double) = _randomizeRadiusPreference.setValue(value)
-    fun setUseVerticalAccuracy(value: Boolean) = _useVerticalAccuracyPreference.setValue(value)
-    fun setVerticalAccuracy(value: Float) = _verticalAccuracyPreference.setValue(value)
-    fun setUseMeanSeaLevel(value: Boolean) = _useMeanSeaLevelPreference.setValue(value)
-    fun setMeanSeaLevel(value: Double) = _meanSeaLevelPreference.setValue(value)
-    fun setUseMeanSeaLevelAccuracy(value: Boolean) = _useMeanSeaLevelAccuracyPreference.setValue(value)
-    fun setMeanSeaLevelAccuracy(value: Float) = _meanSeaLevelAccuracyPreference.setValue(value)
-    fun setUseSpeed(value: Boolean) = _useSpeedPreference.setValue(value)
-    fun setSpeed(value: Float) = _speedPreference.setValue(value)
-    fun setUseSpeedAccuracy(value: Boolean) = _useSpeedAccuracyPreference.setValue(value)
-    fun setSpeedAccuracy(value: Float) = _speedAccuracyPreference.setValue(value)
-    fun setHideFakeLocationToast(value: Boolean) = _hideFakeLocationToastPreference.setValue(value)
-    fun setEnableBroadcastControl(value: Boolean) = _enableBroadcastControlPreference.setValue(value)
-    fun setLanguageTag(value: String) = _languageTagPreference.setValue(value)
+    fun setUseAccuracy(value: Boolean) = _useAccuracy.set(value)
+    fun setAccuracy(value: Double) = _accuracy.set(value)
+    fun setUseAltitude(value: Boolean) = _useAltitude.set(value)
+    fun setAltitude(value: Double) = _altitude.set(value)
+    fun setUseRandomize(value: Boolean) = _useRandomize.set(value)
+    fun setRandomizeRadius(value: Double) = _randomizeRadius.set(value)
+    fun setUseVerticalAccuracy(value: Boolean) = _useVerticalAccuracy.set(value)
+    fun setVerticalAccuracy(value: Float) = _verticalAccuracy.set(value)
+    fun setUseMeanSeaLevel(value: Boolean) = _useMeanSeaLevel.set(value)
+    fun setMeanSeaLevel(value: Double) = _meanSeaLevel.set(value)
+    fun setUseMeanSeaLevelAccuracy(value: Boolean) = _useMeanSeaLevelAccuracy.set(value)
+    fun setMeanSeaLevelAccuracy(value: Float) = _meanSeaLevelAccuracy.set(value)
+    fun setUseSpeed(value: Boolean) = _useSpeed.set(value)
+    fun setSpeed(value: Float) = _speed.set(value)
+    fun setUseSpeedAccuracy(value: Boolean) = _useSpeedAccuracy.set(value)
+    fun setSpeedAccuracy(value: Float) = _speedAccuracy.set(value)
+    fun setHideFakeLocationToast(value: Boolean) = _hideFakeLocationToast.set(value)
+    fun setLanguageTag(value: String) = _languageTag.set(value)
+
+    /**
+     * Persists the broadcast-control toggle and enables/disables the [ControlReceiver] manifest
+     * component in lockstep, so the stored flag and the receiver's exported state never diverge.
+     */
+    fun setEnableBroadcastControl(value: Boolean) {
+        _enableBroadcastControl.set(value)
+        val context = getApplication<Application>()
+        val component = ComponentName(context, ControlReceiver::class.java)
+        val newState = if (value) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        context.packageManager.setComponentEnabledSetting(
+            component,
+            newState,
+            PackageManager.DONT_KILL_APP
+        )
+    }
 
     /**
      * Adds (or removes) the system framework packages to the module scope. The persisted toggle is
@@ -360,7 +290,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setEnableSystemHooks(enabled: Boolean) {
         val service = App.service
         if (service == null) {
-            _systemHooksEvents.tryEmit(SystemHooksEvent.ModuleNotActive)
+            _systemHooksEvents.trySend(SystemHooksEvent.ModuleNotActive)
             return
         }
 
@@ -369,19 +299,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 override fun onScopeRequestApproved(approved: List<String>) {
                     viewModelScope.launch {
                         preferencesRepository.saveEnableSystemHooks(true)
-                        _systemHooksEvents.tryEmit(SystemHooksEvent.RestartRequired(true))
+                        _systemHooksEvents.trySend(SystemHooksEvent.RestartRequired(true))
                     }
                 }
 
                 override fun onScopeRequestFailed(message: String) {
-                    _systemHooksEvents.tryEmit(SystemHooksEvent.ScopeRequestFailed(message))
+                    _systemHooksEvents.trySend(SystemHooksEvent.ScopeRequestFailed(message))
                 }
             }
             viewModelScope.launch {
                 try {
                     withContext(Dispatchers.IO) { service.requestScope(SYSTEM_HOOK_PACKAGES, callback) }
                 } catch (e: XposedService.ServiceException) {
-                    _systemHooksEvents.tryEmit(SystemHooksEvent.ScopeRequestFailed(e.message ?: e.toString()))
+                    _systemHooksEvents.trySend(SystemHooksEvent.ScopeRequestFailed(e.message ?: e.toString()))
                 }
             }
         } else {
@@ -389,9 +319,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 try {
                     withContext(Dispatchers.IO) { service.removeScope(SYSTEM_HOOK_PACKAGES) }
                     preferencesRepository.saveEnableSystemHooks(false)
-                    _systemHooksEvents.tryEmit(SystemHooksEvent.RestartRequired(false))
+                    _systemHooksEvents.trySend(SystemHooksEvent.RestartRequired(false))
                 } catch (e: XposedService.ServiceException) {
-                    _systemHooksEvents.tryEmit(SystemHooksEvent.ScopeRequestFailed(e.message ?: e.toString()))
+                    _systemHooksEvents.trySend(SystemHooksEvent.ScopeRequestFailed(e.message ?: e.toString()))
                 }
             }
         }
