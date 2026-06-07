@@ -36,7 +36,9 @@ enum class SettingsCategory(@StringRes val titleRes: Int) {
  * @property titleRes String resource for the setting name shown next to the enable switch.
  * @property descriptionRes String resource for the help text shown when the info icon is tapped.
  * @property labelRes String resource for the short label used as the value field's floating label.
- * @property unit Unit suffix appended inside the value field (e.g. `"m"`, `"m/s"`).
+ * @property unitRes String resource for the unit suffix appended inside the value field
+ *   (e.g. [R.string.unit_meters], [R.string.unit_meters_per_second]). Using a resource keeps unit
+ *   strings consistent between locales without duplicating them in translation files.
  * @property min Inclusive lower bound of the slider and value field.
  * @property max Inclusive upper bound of the slider and value field.
  * @property step Granularity hint; used only to derive [decimals] — values `>= 1f` give zero
@@ -49,7 +51,7 @@ enum class NumericSetting(
     @StringRes val titleRes: Int,
     @StringRes val descriptionRes: Int,
     @StringRes val labelRes: Int,
-    val unit: String,
+    @StringRes val unitRes: Int,
     val min: Float,
     val max: Float,
     val step: Float,
@@ -59,49 +61,49 @@ enum class NumericSetting(
         R.string.setting_randomize_title,
         R.string.setting_randomize_description,
         R.string.setting_randomize_radius_label,
-        unit = "m", min = 0f, max = 2000f, step = 0.1f, default = DEFAULT_RANDOMIZE_RADIUS.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 2000f, step = 0.1f, default = DEFAULT_RANDOMIZE_RADIUS.toFloat()
     ),
     HORIZONTAL_ACCURACY(
         R.string.setting_horizontal_accuracy_title,
         R.string.setting_horizontal_accuracy_description,
         R.string.setting_horizontal_accuracy_label,
-        unit = "m", min = 0f, max = 100f, step = 1f, default = DEFAULT_ACCURACY.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, step = 1f, default = DEFAULT_ACCURACY.toFloat()
     ),
     VERTICAL_ACCURACY(
         R.string.setting_vertical_accuracy_title,
         R.string.setting_vertical_accuracy_description,
         R.string.setting_vertical_accuracy_label,
-        unit = "m", min = 0f, max = 100f, step = 1f, default = DEFAULT_VERTICAL_ACCURACY
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, step = 1f, default = DEFAULT_VERTICAL_ACCURACY
     ),
     ALTITUDE(
         R.string.setting_altitude_title,
         R.string.setting_altitude_description,
         R.string.setting_altitude_label,
-        unit = "m", min = 0f, max = 2000f, step = 0.5f, default = DEFAULT_ALTITUDE.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 2000f, step = 0.5f, default = DEFAULT_ALTITUDE.toFloat()
     ),
     MEAN_SEA_LEVEL(
         R.string.setting_msl_title,
         R.string.setting_msl_description,
         R.string.setting_msl_label,
-        unit = "m", min = -400f, max = 2000f, step = 0.5f, default = DEFAULT_MEAN_SEA_LEVEL.toFloat()
+        unitRes = R.string.unit_meters, min = -400f, max = 2000f, step = 0.5f, default = DEFAULT_MEAN_SEA_LEVEL.toFloat()
     ),
     MEAN_SEA_LEVEL_ACCURACY(
         R.string.setting_msl_accuracy_title,
         R.string.setting_msl_accuracy_description,
         R.string.setting_msl_accuracy_label,
-        unit = "m", min = 0f, max = 100f, step = 1f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, step = 1f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
     ),
     SPEED(
         R.string.setting_speed_title,
         R.string.setting_speed_description,
         R.string.setting_speed_label,
-        unit = "m/s", min = 0f, max = 30f, step = 0.1f, default = DEFAULT_SPEED
+        unitRes = R.string.unit_meters_per_second, min = 0f, max = 30f, step = 0.1f, default = DEFAULT_SPEED
     ),
     SPEED_ACCURACY(
         R.string.setting_speed_accuracy_title,
         R.string.setting_speed_accuracy_description,
         R.string.setting_speed_accuracy_label,
-        unit = "m/s", min = 0f, max = 100f, step = 1f, default = DEFAULT_SPEED_ACCURACY
+        unitRes = R.string.unit_meters_per_second, min = 0f, max = 100f, step = 1f, default = DEFAULT_SPEED_ACCURACY
     );
 
     /**

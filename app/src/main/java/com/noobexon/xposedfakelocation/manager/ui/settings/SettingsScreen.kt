@@ -910,7 +910,7 @@ private fun NumericSettingItem(
     val title = stringResource(setting.titleRes)
     val description = stringResource(setting.descriptionRes)
     val label = stringResource(setting.labelRes)
-    val unit = setting.unit
+    val unit = stringResource(setting.unitRes)
     val minValue = setting.min
     val maxValue = setting.max
 

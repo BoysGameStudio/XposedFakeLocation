@@ -22,6 +22,8 @@
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_collapse_search">Collapse search</string>
     <string name="cd_more_options">More options</string>
+    <string name="unit_meters">m</string>
+    <string name="unit_meters_per_second">m/s</string>
     <string name="cd_menu">Menu</string>
     <string name="cd_center">Center</string>
     <string name="cd_options">Options</string>
