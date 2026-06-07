@@ -3,6 +3,7 @@ package com.noobexon.xposedfakelocation.manager.ui.settings
 import android.app.Activity
 import android.content.ComponentName
 import android.content.pm.PackageManager
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +48,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,141 +80,98 @@ private object Dimensions {
     val CARD_ELEVATION = 2.dp
 }
 
-private object SettingDefinitions {
-    @Composable
-    fun getCategories(): Map<String, List<String>> {
-        val randomizeTitle = stringResource(R.string.setting_randomize_title)
-        val horizontalAccuracyTitle = stringResource(R.string.setting_horizontal_accuracy_title)
-        val verticalAccuracyTitle = stringResource(R.string.setting_vertical_accuracy_title)
-        val altitudeTitle = stringResource(R.string.setting_altitude_title)
-        val mslTitle = stringResource(R.string.setting_msl_title)
-        val mslAccuracyTitle = stringResource(R.string.setting_msl_accuracy_title)
-        val speedTitle = stringResource(R.string.setting_speed_title)
-        val speedAccuracyTitle = stringResource(R.string.setting_speed_accuracy_title)
+/**
+ * Static, stable metadata for a numeric (slider) setting. All fields are immutable primitives or
+ * [StringRes] ids, so entries are singletons that never allocate per recomposition. The dynamic
+ * value and its setter are resolved at the call site from [SettingsViewModel] (see
+ * [NumericSettingsSections]); the UI layer works uniformly in [Float] and converts back to the
+ * persisted type in the setter lambda.
+ */
+private enum class NumericSetting(
+    @StringRes val titleRes: Int,
+    @StringRes val descriptionRes: Int,
+    @StringRes val labelRes: Int,
+    val unit: String,
+    val min: Float,
+    val max: Float,
+    val step: Float
+) {
+    RANDOMIZE_RADIUS(
+        R.string.setting_randomize_title,
+        R.string.setting_randomize_description,
+        R.string.setting_randomize_radius_label,
+        unit = "m", min = 0f, max = 2000f, step = 0.1f
+    ),
+    HORIZONTAL_ACCURACY(
+        R.string.setting_horizontal_accuracy_title,
+        R.string.setting_horizontal_accuracy_description,
+        R.string.setting_horizontal_accuracy_label,
+        unit = "m", min = 0f, max = 100f, step = 1f
+    ),
+    VERTICAL_ACCURACY(
+        R.string.setting_vertical_accuracy_title,
+        R.string.setting_vertical_accuracy_description,
+        R.string.setting_vertical_accuracy_label,
+        unit = "m", min = 0f, max = 100f, step = 1f
+    ),
+    ALTITUDE(
+        R.string.setting_altitude_title,
+        R.string.setting_altitude_description,
+        R.string.setting_altitude_label,
+        unit = "m", min = 0f, max = 2000f, step = 0.5f
+    ),
+    MEAN_SEA_LEVEL(
+        R.string.setting_msl_title,
+        R.string.setting_msl_description,
+        R.string.setting_msl_label,
+        unit = "m", min = -400f, max = 2000f, step = 0.5f
+    ),
+    MEAN_SEA_LEVEL_ACCURACY(
+        R.string.setting_msl_accuracy_title,
+        R.string.setting_msl_accuracy_description,
+        R.string.setting_msl_accuracy_label,
+        unit = "m", min = 0f, max = 100f, step = 1f
+    ),
+    SPEED(
+        R.string.setting_speed_title,
+        R.string.setting_speed_description,
+        R.string.setting_speed_label,
+        unit = "m/s", min = 0f, max = 30f, step = 0.1f
+    ),
+    SPEED_ACCURACY(
+        R.string.setting_speed_accuracy_title,
+        R.string.setting_speed_accuracy_description,
+        R.string.setting_speed_accuracy_label,
+        unit = "m/s", min = 0f, max = 100f, step = 1f
+    )
+}
 
-        return mapOf(
-            stringResource(R.string.category_location) to listOf(
-                randomizeTitle,
-                horizontalAccuracyTitle,
-                verticalAccuracyTitle
-            ),
-            stringResource(R.string.category_altitude) to listOf(
-                altitudeTitle,
-                mslTitle,
-                mslAccuracyTitle
-            ),
-            stringResource(R.string.category_movement) to listOf(
-                speedTitle,
-                speedAccuracyTitle
-            )
+/** Groups [NumericSetting]s under a localized category header, in display order. */
+private enum class SettingCategory(
+    @StringRes val titleRes: Int,
+    val settings: List<NumericSetting>
+) {
+    LOCATION(
+        R.string.category_location,
+        listOf(
+            NumericSetting.RANDOMIZE_RADIUS,
+            NumericSetting.HORIZONTAL_ACCURACY,
+            NumericSetting.VERTICAL_ACCURACY
         )
-    }
-
-    @Composable
-    fun getSettings(viewModel: SettingsViewModel): List<SettingData> = listOf(
-        DoubleSettingData(
-            title = stringResource(R.string.setting_randomize_title),
-            description = stringResource(R.string.setting_randomize_description),
-            useValueState = viewModel.useRandomize.collectAsStateWithLifecycle(),
-            valueState = viewModel.randomizeRadius.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseRandomize,
-            setValue = viewModel::setRandomizeRadius,
-            label = stringResource(R.string.setting_randomize_radius_label),
-            unit = "m",
-            minValue = 0f,
-            maxValue = 2000f,
-            step = 0.1f
-        ),
-        DoubleSettingData(
-            title = stringResource(R.string.setting_horizontal_accuracy_title),
-            description = stringResource(R.string.setting_horizontal_accuracy_description),
-            useValueState = viewModel.useAccuracy.collectAsStateWithLifecycle(),
-            valueState = viewModel.accuracy.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseAccuracy,
-            setValue = viewModel::setAccuracy,
-            label = stringResource(R.string.setting_horizontal_accuracy_label),
-            unit = "m",
-            minValue = 0f,
-            maxValue = 100f,
-            step = 1f
-        ),
-        FloatSettingData(
-            title = stringResource(R.string.setting_vertical_accuracy_title),
-            description = stringResource(R.string.setting_vertical_accuracy_description),
-            useValueState = viewModel.useVerticalAccuracy.collectAsStateWithLifecycle(),
-            valueState = viewModel.verticalAccuracy.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseVerticalAccuracy,
-            setValue = viewModel::setVerticalAccuracy,
-            label = stringResource(R.string.setting_vertical_accuracy_label),
-            unit = "m",
-            minValue = 0f,
-            maxValue = 100f,
-            step = 1f
-        ),
-        DoubleSettingData(
-            title = stringResource(R.string.setting_altitude_title),
-            description = stringResource(R.string.setting_altitude_description),
-            useValueState = viewModel.useAltitude.collectAsStateWithLifecycle(),
-            valueState = viewModel.altitude.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseAltitude,
-            setValue = viewModel::setAltitude,
-            label = stringResource(R.string.setting_altitude_label),
-            unit = "m",
-            minValue = 0f,
-            maxValue = 2000f,
-            step = 0.5f
-        ),
-        DoubleSettingData(
-            title = stringResource(R.string.setting_msl_title),
-            description = stringResource(R.string.setting_msl_description),
-            useValueState = viewModel.useMeanSeaLevel.collectAsStateWithLifecycle(),
-            valueState = viewModel.meanSeaLevel.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseMeanSeaLevel,
-            setValue = viewModel::setMeanSeaLevel,
-            label = stringResource(R.string.setting_msl_label),
-            unit = "m",
-            minValue = -400f,
-            maxValue = 2000f,
-            step = 0.5f
-        ),
-        FloatSettingData(
-            title = stringResource(R.string.setting_msl_accuracy_title),
-            description = stringResource(R.string.setting_msl_accuracy_description),
-            useValueState = viewModel.useMeanSeaLevelAccuracy.collectAsStateWithLifecycle(),
-            valueState = viewModel.meanSeaLevelAccuracy.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseMeanSeaLevelAccuracy,
-            setValue = viewModel::setMeanSeaLevelAccuracy,
-            label = stringResource(R.string.setting_msl_accuracy_label),
-            unit = "m",
-            minValue = 0f,
-            maxValue = 100f,
-            step = 1f
-        ),
-        FloatSettingData(
-            title = stringResource(R.string.setting_speed_title),
-            description = stringResource(R.string.setting_speed_description),
-            useValueState = viewModel.useSpeed.collectAsStateWithLifecycle(),
-            valueState = viewModel.speed.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseSpeed,
-            setValue = viewModel::setSpeed,
-            label = stringResource(R.string.setting_speed_label),
-            unit = "m/s",
-            minValue = 0f,
-            maxValue = 30f,
-            step = 0.1f
-        ),
-        FloatSettingData(
-            title = stringResource(R.string.setting_speed_accuracy_title),
-            description = stringResource(R.string.setting_speed_accuracy_description),
-            useValueState = viewModel.useSpeedAccuracy.collectAsStateWithLifecycle(),
-            valueState = viewModel.speedAccuracy.collectAsStateWithLifecycle(),
-            setUseValue = viewModel::setUseSpeedAccuracy,
-            setValue = viewModel::setSpeedAccuracy,
-            label = stringResource(R.string.setting_speed_accuracy_label),
-            unit = "m/s",
-            minValue = 0f,
-            maxValue = 100f,
-            step = 1f
+    ),
+    ALTITUDE(
+        R.string.category_altitude,
+        listOf(
+            NumericSetting.ALTITUDE,
+            NumericSetting.MEAN_SEA_LEVEL,
+            NumericSetting.MEAN_SEA_LEVEL_ACCURACY
+        )
+    ),
+    MOVEMENT(
+        R.string.category_movement,
+        listOf(
+            NumericSetting.SPEED,
+            NumericSetting.SPEED_ACCURACY
         )
     )
 }
@@ -228,8 +185,6 @@ fun SettingsScreen(
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val scrollState = rememberScrollState()
-    val allSettings = SettingDefinitions.getSettings(settingsViewModel)
-    val categories = SettingDefinitions.getCategories()
     val selectedLanguage = LanguageOption.fromTag(settingsViewModel.languageTag.collectAsStateWithLifecycle().value)
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -366,38 +321,7 @@ fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.height(Dimensions.SPACING_MEDIUM))
 
-                categories.forEach { (category, settingsInCategory) ->
-                    CategoryHeader(category)
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = Dimensions.SPACING_SMALL),
-                        shape = RoundedCornerShape(Dimensions.CARD_CORNER_RADIUS),
-                        elevation = CardDefaults.cardElevation(defaultElevation = Dimensions.CARD_ELEVATION)
-                    ) {
-                        Column(modifier = Modifier.padding(Dimensions.SPACING_SMALL)) {
-                            settingsInCategory.forEach { settingTitle ->
-                                val setting = allSettings.find { it.title == settingTitle }
-                                setting?.let {
-                                        when (setting) {
-                                            is DoubleSettingData -> DoubleSettingComposable(setting)
-                                            is FloatSettingData -> FloatSettingComposable(setting)
-                                        }
-
-                                }
-                                if (settingTitle != settingsInCategory.last()) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(vertical = Dimensions.SPACING_SMALL),
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(Dimensions.SPACING_MEDIUM))
-                }
+                NumericSettingsSections(settingsViewModel)
 
                 Spacer(modifier = Modifier.height(Dimensions.SPACING_LARGE))
             }
@@ -590,85 +514,137 @@ fun BooleanSettingItem(
     }
 }
 
+/**
+ * Renders every numeric spoofing setting, grouped by [SettingCategory]. Collects the relevant
+ * flows once here (lifecycle-aware) and dispatches the live value + setter to each item. Each
+ * [NumericSettingItem] receives only plain values + callbacks, so unchanged items skip when a
+ * single value changes. [Double]-backed settings are converted at the [Float] boundary.
+ */
 @Composable
-fun DoubleSettingItem(
-    title: String,
-    description: String,
-    useValue: Boolean,
-    onUseValueChange: (Boolean) -> Unit,
-    value: Double,
-    onValueChange: (Double) -> Unit,
-    label: String,
-    unit: String,
-    minValue: Float,
-    maxValue: Float,
-    step: Float
-) {
-    SettingItem(
-        title = title,
-        description = description,
-        useValue = useValue,
-        onUseValueChange = onUseValueChange,
-        value = value,
-        onValueChange = onValueChange,
-        label = label,
-        unit = unit,
-        minValue = minValue,
-        maxValue = maxValue,
-        step = step,
-        valueFormatter = { "%.2f".format(it) },
-        parseValue = { it.toDouble() }
-    )
-}
+private fun NumericSettingsSections(viewModel: SettingsViewModel) {
+    val useRandomize by viewModel.useRandomize.collectAsStateWithLifecycle()
+    val randomizeRadius by viewModel.randomizeRadius.collectAsStateWithLifecycle()
+    val useAccuracy by viewModel.useAccuracy.collectAsStateWithLifecycle()
+    val accuracy by viewModel.accuracy.collectAsStateWithLifecycle()
+    val useVerticalAccuracy by viewModel.useVerticalAccuracy.collectAsStateWithLifecycle()
+    val verticalAccuracy by viewModel.verticalAccuracy.collectAsStateWithLifecycle()
+    val useAltitude by viewModel.useAltitude.collectAsStateWithLifecycle()
+    val altitude by viewModel.altitude.collectAsStateWithLifecycle()
+    val useMeanSeaLevel by viewModel.useMeanSeaLevel.collectAsStateWithLifecycle()
+    val meanSeaLevel by viewModel.meanSeaLevel.collectAsStateWithLifecycle()
+    val useMeanSeaLevelAccuracy by viewModel.useMeanSeaLevelAccuracy.collectAsStateWithLifecycle()
+    val meanSeaLevelAccuracy by viewModel.meanSeaLevelAccuracy.collectAsStateWithLifecycle()
+    val useSpeed by viewModel.useSpeed.collectAsStateWithLifecycle()
+    val speed by viewModel.speed.collectAsStateWithLifecycle()
+    val useSpeedAccuracy by viewModel.useSpeedAccuracy.collectAsStateWithLifecycle()
+    val speedAccuracy by viewModel.speedAccuracy.collectAsStateWithLifecycle()
 
-@Composable
-fun FloatSettingItem(
-    title: String,
-    description: String,
-    useValue: Boolean,
-    onUseValueChange: (Boolean) -> Unit,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    label: String,
-    unit: String,
-    minValue: Float,
-    maxValue: Float,
-    step: Float
-) {
-    SettingItem(
-        title = title,
-        description = description,
-        useValue = useValue,
-        onUseValueChange = onUseValueChange,
-        value = value,
-        onValueChange = onValueChange,
-        label = label,
-        unit = unit,
-        minValue = minValue,
-        maxValue = maxValue,
-        step = step,
-        valueFormatter = { "%.2f".format(it) },
-        parseValue = { it }
-    )
+    SettingCategory.entries.forEach { category ->
+        CategoryHeader(stringResource(category.titleRes))
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Dimensions.SPACING_SMALL),
+            shape = RoundedCornerShape(Dimensions.CARD_CORNER_RADIUS),
+            elevation = CardDefaults.cardElevation(defaultElevation = Dimensions.CARD_ELEVATION)
+        ) {
+            Column(modifier = Modifier.padding(Dimensions.SPACING_SMALL)) {
+                category.settings.forEachIndexed { index, setting ->
+                    val useValue: Boolean
+                    val value: Float
+                    val onUseValueChange: (Boolean) -> Unit
+                    val onValueChange: (Float) -> Unit
+                    when (setting) {
+                        NumericSetting.RANDOMIZE_RADIUS -> {
+                            useValue = useRandomize
+                            value = randomizeRadius.toFloat()
+                            onUseValueChange = viewModel::setUseRandomize
+                            onValueChange = { viewModel.setRandomizeRadius(it.toDouble()) }
+                        }
+                        NumericSetting.HORIZONTAL_ACCURACY -> {
+                            useValue = useAccuracy
+                            value = accuracy.toFloat()
+                            onUseValueChange = viewModel::setUseAccuracy
+                            onValueChange = { viewModel.setAccuracy(it.toDouble()) }
+                        }
+                        NumericSetting.VERTICAL_ACCURACY -> {
+                            useValue = useVerticalAccuracy
+                            value = verticalAccuracy
+                            onUseValueChange = viewModel::setUseVerticalAccuracy
+                            onValueChange = viewModel::setVerticalAccuracy
+                        }
+                        NumericSetting.ALTITUDE -> {
+                            useValue = useAltitude
+                            value = altitude.toFloat()
+                            onUseValueChange = viewModel::setUseAltitude
+                            onValueChange = { viewModel.setAltitude(it.toDouble()) }
+                        }
+                        NumericSetting.MEAN_SEA_LEVEL -> {
+                            useValue = useMeanSeaLevel
+                            value = meanSeaLevel.toFloat()
+                            onUseValueChange = viewModel::setUseMeanSeaLevel
+                            onValueChange = { viewModel.setMeanSeaLevel(it.toDouble()) }
+                        }
+                        NumericSetting.MEAN_SEA_LEVEL_ACCURACY -> {
+                            useValue = useMeanSeaLevelAccuracy
+                            value = meanSeaLevelAccuracy
+                            onUseValueChange = viewModel::setUseMeanSeaLevelAccuracy
+                            onValueChange = viewModel::setMeanSeaLevelAccuracy
+                        }
+                        NumericSetting.SPEED -> {
+                            useValue = useSpeed
+                            value = speed
+                            onUseValueChange = viewModel::setUseSpeed
+                            onValueChange = viewModel::setSpeed
+                        }
+                        NumericSetting.SPEED_ACCURACY -> {
+                            useValue = useSpeedAccuracy
+                            value = speedAccuracy
+                            onUseValueChange = viewModel::setUseSpeedAccuracy
+                            onValueChange = viewModel::setSpeedAccuracy
+                        }
+                    }
+
+                    NumericSettingItem(
+                        setting = setting,
+                        useValue = useValue,
+                        onUseValueChange = onUseValueChange,
+                        value = value,
+                        onValueChange = onValueChange
+                    )
+
+                    if (index != category.settings.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = Dimensions.SPACING_SMALL),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Dimensions.SPACING_MEDIUM))
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun <T : Number> SettingItem(
-    title: String,
-    description: String,
+private fun NumericSettingItem(
+    setting: NumericSetting,
     useValue: Boolean,
     onUseValueChange: (Boolean) -> Unit,
-    value: T,
-    onValueChange: (T) -> Unit,
-    label: String,
-    unit: String,
-    minValue: Float,
-    maxValue: Float,
-    step: Float,
-    valueFormatter: (T) -> String,
-    parseValue: (Float) -> T
+    value: Float,
+    onValueChange: (Float) -> Unit
 ) {
+    val title = stringResource(setting.titleRes)
+    val description = stringResource(setting.descriptionRes)
+    val label = stringResource(setting.labelRes)
+    val unit = setting.unit
+    val minValue = setting.min
+    val maxValue = setting.max
+    val step = setting.step
+
     var showTooltip by remember { mutableStateOf(false) }
     val moreInfoDescription = stringResource(R.string.setting_more_info, title)
     val disableDescription = stringResource(R.string.setting_disable, title)
@@ -733,11 +709,11 @@ private fun <T : Number> SettingItem(
         if (useValue) {
             Spacer(modifier = Modifier.height(Dimensions.SPACING_MEDIUM))
 
-            var sliderValue by remember { mutableFloatStateOf(value.toFloat()) }
+            var sliderValue by remember { mutableFloatStateOf(value) }
             var showExactValue by remember { mutableStateOf(false) }
 
             LaunchedEffect(value) {
-                if (sliderValue != value.toFloat()) sliderValue = value.toFloat()
+                if (sliderValue != value) sliderValue = value
             }
 
             Row(
@@ -748,7 +724,7 @@ private fun <T : Number> SettingItem(
                 val displayText = stringResource(
                     R.string.setting_value_display,
                     label,
-                    valueFormatter(parseValue(sliderValue)),
+                    "%.2f".format(sliderValue),
                     unit
                 )
                 Text(
@@ -763,7 +739,7 @@ private fun <T : Number> SettingItem(
                     onClick = {
                         val newValue = (sliderValue - step).coerceAtLeast(minValue)
                         sliderValue = newValue
-                        onValueChange(parseValue(newValue))
+                        onValueChange(newValue)
                     },
                     enabled = sliderValue > minValue,
                     modifier = Modifier.size(32.dp),
@@ -780,7 +756,7 @@ private fun <T : Number> SettingItem(
                     onClick = {
                         val newValue = (sliderValue + step).coerceAtMost(maxValue)
                         sliderValue = newValue
-                        onValueChange(parseValue(newValue))
+                        onValueChange(newValue)
                     },
                     enabled = sliderValue < maxValue,
                     modifier = Modifier.size(32.dp),
@@ -815,7 +791,7 @@ private fun <T : Number> SettingItem(
             Slider(
                 value = sliderValue,
                 onValueChange = { newValue -> sliderValue = newValue },
-                onValueChangeFinished = { onValueChange(parseValue(sliderValue)) },
+                onValueChangeFinished = { onValueChange(sliderValue) },
                 valueRange = minValue..maxValue,
                 steps = ((maxValue - minValue) / step).toInt() - 1,
                 colors = SliderDefaults.colors(
@@ -829,78 +805,4 @@ private fun <T : Number> SettingItem(
             )
         }
     }
-}
-
-sealed class SettingData {
-    abstract val title: String
-    abstract val description: String
-    abstract val useValueState: State<Boolean>
-    abstract val setUseValue: (Boolean) -> Unit
-    abstract val label: String
-    abstract val unit: String
-    abstract val minValue: Float
-    abstract val maxValue: Float
-    abstract val step: Float
-}
-
-data class DoubleSettingData(
-    override val title: String,
-    override val description: String,
-    override val useValueState: State<Boolean>,
-    val valueState: State<Double>,
-    override val setUseValue: (Boolean) -> Unit,
-    val setValue: (Double) -> Unit,
-    override val label: String,
-    override val unit: String,
-    override val minValue: Float,
-    override val maxValue: Float,
-    override val step: Float
-) : SettingData()
-
-data class FloatSettingData(
-    override val title: String,
-    override val description: String,
-    override val useValueState: State<Boolean>,
-    val valueState: State<Float>,
-    override val setUseValue: (Boolean) -> Unit,
-    val setValue: (Float) -> Unit,
-    override val label: String,
-    override val unit: String,
-    override val minValue: Float,
-    override val maxValue: Float,
-    override val step: Float
-) : SettingData()
-
-@Composable
-fun DoubleSettingComposable(setting: DoubleSettingData) {
-    DoubleSettingItem(
-        title = setting.title,
-        description = setting.description,
-        useValue = setting.useValueState.value,
-        onUseValueChange = setting.setUseValue,
-        value = setting.valueState.value,
-        onValueChange = setting.setValue,
-        label = setting.label,
-        unit = setting.unit,
-        minValue = setting.minValue,
-        maxValue = setting.maxValue,
-        step = setting.step
-    )
-}
-
-@Composable
-fun FloatSettingComposable(setting: FloatSettingData) {
-    FloatSettingItem(
-        title = setting.title,
-        description = setting.description,
-        useValue = setting.useValueState.value,
-        onUseValueChange = setting.setUseValue,
-        value = setting.valueState.value,
-        onValueChange = setting.setValue,
-        label = setting.label,
-        unit = setting.unit,
-        minValue = setting.minValue,
-        maxValue = setting.maxValue,
-        step = setting.step
-    )
 }
