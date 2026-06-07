@@ -311,7 +311,13 @@ private fun SettingsContent(
                 },
                 actions = {
                     if (searchActive) {
-                        IconButton(onClick = { query = "" }) {
+                        IconButton(onClick = {
+                            if (query.isEmpty()) {
+                                searchActive = false
+                            } else {
+                                query = ""
+                            }
+                        }) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
                         }
                     } else {
