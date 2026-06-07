@@ -20,6 +20,7 @@
     <string name="cd_change_language">更改语言</string>
     <string name="cd_search_settings">搜索设置</string>
     <string name="cd_clear_search">清除搜索</string>
+    <string name="cd_collapse_search">收起搜索</string>
     <string name="cd_more_options">更多选项</string>
     <string name="cd_menu">菜单</string>
     <string name="cd_center">居中</string>

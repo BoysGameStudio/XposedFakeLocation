@@ -2,6 +2,7 @@ package com.noobexon.xposedfakelocation.manager.ui.settings
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -75,6 +77,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -99,36 +102,23 @@ private object Dimensions {
 }
 
 /**
- * Top-level settings screen. Branded top bar with search + an overflow (reset) menu; a unified,
- * searchable list of [SettingEntry]s grouped by [SettingsCategory]. Collects one-shot
- * [SystemHooksEvent]s (lifecycle-aware) to show a snackbar or the reboot-required dialog.
+ * Settings state holder. Owns the [SettingsViewModel], collects every preference flow, builds the
+ * declarative [SettingEntry] list, and handles one-shot [SystemHooksEvent]s (lifecycle-aware) by
+ * driving a snackbar / reboot dialog. Delegates all layout to the stateless [SettingsContent], which
+ * keeps that part previewable and testable.
  *
  * @param navController used to navigate back from the top app bar.
  * @param settingsViewModel state holder for all settings; defaults to the screen-scoped instance.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
     settingsViewModel: SettingsViewModel = viewModel()
 ) {
-    val focusManager = LocalFocusManager.current
     val context = LocalContext.current
-    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    var searchActive by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showResetDialog by remember { mutableStateOf(false) }
-    var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) } // null = hidden; true = enabled; false = disabled
-
-    // Collapse search on Back before leaving the screen.
-    BackHandler(enabled = searchActive) {
-        searchActive = false
-        query = ""
-    }
+    var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) } // null = hidden; true/false = enabled/disabled
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, settingsViewModel) {
@@ -194,16 +184,72 @@ fun SettingsScreen(
         ),
         SettingsCategory.LANGUAGE to listOf(
             SettingEntry.Language(selectedLanguage) { option ->
-                settingsViewModel.setLanguageTag(option.tag)
-                LocaleController.persistLanguageTag(context, option.tag)
-                (context as? Activity)?.recreate()
+                settingsViewModel.setLanguage(option.tag)
+                context.findActivity()?.recreate()
             }
         )
     )
 
-    val filtered = categories
-        .map { (category, entries) -> category to entries.filter { entryMatches(query, searchTextOf(it, context)) } }
-        .filter { it.second.isNotEmpty() }
+    SettingsContent(
+        categories = categories,
+        snackbarHostState = snackbarHostState,
+        restartDialogEnabled = restartDialogEnabled,
+        onRestartDialogDismiss = { restartDialogEnabled = null },
+        onBack = { navController.navigateUp() },
+        onResetConfirmed = {
+            settingsViewModel.resetToDefaults()
+            scope.launch {
+                snackbarHostState.showSnackbar(context.getString(R.string.settings_reset_done))
+            }
+        }
+    )
+}
+
+/**
+ * Stateless settings UI. Renders the branded top bar (with search + an overflow reset menu) and the
+ * searchable list of [categories]; owns only UI-local state (search field, menu, dialog visibility).
+ * All app/business actions arrive as callbacks, so this composable is previewable without a ViewModel.
+ *
+ * @param categories grouped entries to render, already in display order.
+ * @param snackbarHostState host for transient messages shown by the state holder.
+ * @param restartDialogEnabled non-null shows the reboot-required dialog (`true` = enabled message).
+ * @param onRestartDialogDismiss dismisses the reboot dialog.
+ * @param onBack invoked when the user navigates back (and search is not open).
+ * @param onResetConfirmed invoked when the user confirms "reset all settings".
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsContent(
+    categories: List<Pair<SettingsCategory, List<SettingEntry>>>,
+    snackbarHostState: SnackbarHostState,
+    restartDialogEnabled: Boolean?,
+    onRestartDialogDismiss: () -> Unit,
+    onBack: () -> Unit,
+    onResetConfirmed: () -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
+
+    var searchActive by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    // Collapse search on Back before leaving the screen.
+    BackHandler(enabled = searchActive) {
+        searchActive = false
+        query = ""
+    }
+
+    // Only do the (per-entry getString) filtering work when actually searching.
+    val filtered = if (query.isBlank()) {
+        categories
+    } else {
+        categories
+            .map { (category, entries) -> category to entries.filter { entryMatches(query, searchTextOf(it, context)) } }
+            .filter { it.second.isNotEmpty() }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -213,6 +259,7 @@ fun SettingsScreen(
                     if (searchActive) {
                         val focusRequester = remember { FocusRequester() }
                         LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        val searchFieldDescription = stringResource(R.string.cd_search_settings)
                         TextField(
                             value = query,
                             onValueChange = { query = it },
@@ -233,6 +280,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(focusRequester)
+                                .semantics { contentDescription = searchFieldDescription }
                         )
                     } else {
                         Text(stringResource(R.string.screen_settings))
@@ -250,12 +298,14 @@ fun SettingsScreen(
                             searchActive = false
                             query = ""
                         } else {
-                            navController.navigateUp()
+                            onBack()
                         }
                     }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_navigate_back)
+                            contentDescription = stringResource(
+                                if (searchActive) R.string.cd_collapse_search else R.string.cd_navigate_back
+                            )
                         )
                     }
                 },
@@ -357,10 +407,7 @@ fun SettingsScreen(
                     confirmButton = {
                         TextButton(onClick = {
                             showResetDialog = false
-                            settingsViewModel.resetToDefaults()
-                            scope.launch {
-                                snackbarHostState.showSnackbar(context.getString(R.string.settings_reset_done))
-                            }
+                            onResetConfirmed()
                         }) {
                             Text(stringResource(R.string.action_reset))
                         }
@@ -375,7 +422,7 @@ fun SettingsScreen(
 
             restartDialogEnabled?.let { enabled ->
                 AlertDialog(
-                    onDismissRequest = { restartDialogEnabled = null },
+                    onDismissRequest = onRestartDialogDismiss,
                     title = { Text(stringResource(R.string.dialog_restart_required_title)) },
                     text = {
                         Text(
@@ -386,7 +433,7 @@ fun SettingsScreen(
                         )
                     },
                     confirmButton = {
-                        TextButton(onClick = { restartDialogEnabled = null }) {
+                        TextButton(onClick = onRestartDialogDismiss) {
                             Text(stringResource(R.string.action_ok))
                         }
                     }
@@ -394,6 +441,13 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+/** Walks the [Context] wrapper chain to the hosting [Activity], or null if there isn't one. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 /** Non-composable: the text searched for [entry] (title + description, plus language display name). */
@@ -456,6 +510,88 @@ private fun CategoryLabel(title: String) {
             top = Dimensions.SPACING_SMALL,
             bottom = Dimensions.SPACING_EXTRA_SMALL
         )
+    )
+}
+
+/**
+ * Shared row header used by the boolean and numeric items: a [title] with an info button that
+ * toggles [description], and a [trailing] slot (typically the enable switch).
+ *
+ * @param title localized setting name.
+ * @param description help text revealed by the info icon.
+ * @param showTooltip whether [description] is currently shown.
+ * @param onToggleTooltip toggles [showTooltip].
+ * @param trailing content placed at the end of the row (e.g. a [Switch]).
+ */
+@Composable
+private fun SettingHeader(
+    title: String,
+    description: String,
+    showTooltip: Boolean,
+    onToggleTooltip: () -> Unit,
+    trailing: @Composable () -> Unit
+) {
+    val moreInfoDescription = stringResource(R.string.setting_more_info, title)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                IconButton(
+                    onClick = onToggleTooltip,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = moreInfoDescription,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            if (showTooltip) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
+                )
+            }
+        }
+
+        trailing()
+    }
+}
+
+/** A switch styled consistently for setting rows, with enable/disable [contentDescription]. */
+@Composable
+private fun SettingSwitch(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val disableDescription = stringResource(R.string.setting_disable, title)
+    val enableDescription = stringResource(R.string.setting_enable, title)
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = MaterialTheme.colorScheme.primary,
+            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        modifier = Modifier.semantics {
+            contentDescription = if (checked) disableDescription else enableDescription
+        }
     )
 }
 
@@ -649,64 +785,21 @@ private fun BooleanSettingItem(
     onCheckedChange: (Boolean) -> Unit
 ) {
     var showTooltip by remember { mutableStateOf(false) }
-    val moreInfoDescription = stringResource(R.string.setting_more_info, title)
-    val disableDescription = stringResource(R.string.setting_disable, title)
-    val enableDescription = stringResource(R.string.setting_enable, title)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(Dimensions.SPACING_SMALL)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    IconButton(
-                        onClick = { showTooltip = !showTooltip },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = moreInfoDescription,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                if (showTooltip) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
-                    )
-                }
+        SettingHeader(
+            title = title,
+            description = description,
+            showTooltip = showTooltip,
+            onToggleTooltip = { showTooltip = !showTooltip },
+            trailing = {
+                SettingSwitch(title = title, checked = checked, onCheckedChange = onCheckedChange)
             }
-
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                modifier = Modifier.semantics {
-                    contentDescription = if (checked) disableDescription else enableDescription
-                }
-            )
-        }
+        )
     }
 }
 
@@ -715,15 +808,17 @@ private fun BooleanSettingItem(
  * when enabled, an editable value field (with unit) plus a continuous slider bounded by
  * [NumericSetting.min]/[NumericSetting.max], with min/max end labels.
  *
- * The field and slider share an internal [Float] mirroring [value] (synced via [LaunchedEffect]).
- * Typing parses and clamps into range and commits; invalid/empty text reverts on focus loss. The
- * slider commits on value-change-finished.
+ * Editing is committed (via [onValueChange]) only when the user finishes — field blur / IME "Done",
+ * or slider release — never on every keystroke, so the screen doesn't persist/recompose mid-edit.
+ * Committed values are clamped to range and rounded to [NumericSetting.decimals] so the shown text
+ * and the stored value always agree. The field/slider share an internal [Float] mirroring [value]
+ * (synced via [LaunchedEffect] without clobbering an in-progress drag).
  *
  * @param setting static metadata (titles, unit, range) for this row.
  * @param useValue whether this setting is currently enabled.
  * @param onUseValueChange invoked when the enable switch is toggled.
  * @param value current committed value, in [setting]'s unit.
- * @param onValueChange invoked with the new value when the user adjusts it.
+ * @param onValueChange invoked with the new value when the user finishes adjusting it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -741,10 +836,8 @@ private fun NumericSettingItem(
     val minValue = setting.min
     val maxValue = setting.max
 
+    val focusManager = LocalFocusManager.current
     var showTooltip by remember { mutableStateOf(false) }
-    val moreInfoDescription = stringResource(R.string.setting_more_info, title)
-    val disableDescription = stringResource(R.string.setting_disable, title)
-    val enableDescription = stringResource(R.string.setting_enable, title)
     val adjustDescription = stringResource(R.string.setting_adjust_value, title)
 
     Column(
@@ -752,55 +845,15 @@ private fun NumericSettingItem(
             .fillMaxWidth()
             .padding(Dimensions.SPACING_SMALL)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    IconButton(
-                        onClick = { showTooltip = !showTooltip },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = moreInfoDescription,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                if (showTooltip) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
-                    )
-                }
+        SettingHeader(
+            title = title,
+            description = description,
+            showTooltip = showTooltip,
+            onToggleTooltip = { showTooltip = !showTooltip },
+            trailing = {
+                SettingSwitch(title = title, checked = useValue, onCheckedChange = onUseValueChange)
             }
-
-            Switch(
-                checked = useValue,
-                onCheckedChange = onUseValueChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                modifier = Modifier.semantics {
-                    contentDescription = if (useValue) disableDescription else enableDescription
-                }
-            )
-        }
+        )
 
         if (useValue) {
             Spacer(modifier = Modifier.height(Dimensions.SPACING_MEDIUM))
@@ -815,27 +868,34 @@ private fun NumericSettingItem(
                 }
             }
 
+            // Clamp + round the typed/dragged value and commit it, keeping field + slider in sync.
+            val commit: () -> Unit = {
+                val parsed = text.toFloatOrNull() ?: sliderValue
+                val committed = setting.roundValue(parsed.coerceIn(minValue, maxValue))
+                sliderValue = committed
+                text = formatNumericValue(committed, setting)
+                onValueChange(committed)
+            }
+
             OutlinedTextField(
                 value = text,
                 onValueChange = { input ->
                     text = input
-                    val parsed = input.toFloatOrNull()
-                    if (parsed != null) {
-                        val clamped = parsed.coerceIn(minValue, maxValue)
-                        sliderValue = clamped
-                        onValueChange(clamped)
-                    }
+                    // Track the slider live as the user types, but don't persist until they finish.
+                    input.toFloatOrNull()?.let { sliderValue = it.coerceIn(minValue, maxValue) }
                 },
                 label = { Text(label) },
                 suffix = { Text(unit) },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { focusState ->
-                        if (!focusState.isFocused) {
-                            text = formatNumericValue(sliderValue, setting)
-                        }
+                        if (!focusState.isFocused) commit()
                     }
             )
 
@@ -847,7 +907,12 @@ private fun NumericSettingItem(
                     sliderValue = newValue
                     text = formatNumericValue(newValue, setting)
                 },
-                onValueChangeFinished = { onValueChange(sliderValue) },
+                onValueChangeFinished = {
+                    val committed = setting.roundValue(sliderValue)
+                    sliderValue = committed
+                    text = formatNumericValue(committed, setting)
+                    onValueChange(committed)
+                },
                 valueRange = minValue..maxValue,
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
@@ -881,7 +946,5 @@ private fun NumericSettingItem(
 }
 
 /** Locale-stable value formatting (uses '.' so the field stays parseable by [String.toFloatOrNull]). */
-private fun formatNumericValue(value: Float, setting: NumericSetting): String {
-    val decimals = if (setting.step >= 1f) 0 else 1
-    return String.format(Locale.US, "%.${decimals}f", value)
-}
+private fun formatNumericValue(value: Float, setting: NumericSetting): String =
+    String.format(Locale.US, "%.${setting.decimals}f", value)

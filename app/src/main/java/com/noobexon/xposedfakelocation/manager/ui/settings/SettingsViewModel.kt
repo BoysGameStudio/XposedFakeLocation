@@ -31,6 +31,7 @@ import com.noobexon.xposedfakelocation.data.SYSTEM_HOOK_PACKAGES
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
 import com.noobexon.xposedfakelocation.manager.App
 import com.noobexon.xposedfakelocation.manager.control.ControlReceiver
+import com.noobexon.xposedfakelocation.manager.localization.LocaleController
 import io.github.libxposed.service.XposedService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -347,7 +348,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setUseSpeedAccuracy(value: Boolean) = _useSpeedAccuracy.set(value)
     fun setSpeedAccuracy(value: Float) = _speedAccuracy.set(value)
     fun setHideFakeLocationToast(value: Boolean) = _hideFakeLocationToast.set(value)
-    fun setLanguageTag(value: String) = _languageTag.set(value)
+
+    /**
+     * Selects the UI [tag] (BCP-47, or empty to follow the system). Persists it through the normal
+     * preference store *and* the [LocaleController]'s synchronous store, which `attachBaseContext`
+     * reads before this ViewModel exists. The caller is still responsible for recreating the
+     * Activity so the new locale is applied.
+     *
+     * @param tag BCP-47 language tag, or empty string to follow the system locale.
+     */
+    fun setLanguage(tag: String) {
+        _languageTag.set(tag)
+        LocaleController.persistLanguageTag(getApplication(), tag)
+    }
 
     /**
      * Persists the broadcast-control toggle and enables/disables the [ControlReceiver] manifest

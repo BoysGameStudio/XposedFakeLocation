@@ -20,6 +20,7 @@
     <string name="cd_change_language">Change language</string>
     <string name="cd_search_settings">Search settings</string>
     <string name="cd_clear_search">Clear search</string>
+    <string name="cd_collapse_search">Collapse search</string>
     <string name="cd_more_options">More options</string>
     <string name="cd_menu">Menu</string>
     <string name="cd_center">Center</string>

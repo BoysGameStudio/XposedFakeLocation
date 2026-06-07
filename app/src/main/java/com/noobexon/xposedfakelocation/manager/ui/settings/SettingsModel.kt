@@ -3,6 +3,7 @@ package com.noobexon.xposedfakelocation.manager.ui.settings
 import androidx.annotation.StringRes
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
+import kotlin.math.round
 
 /**
  * Settings categories in display order (top to bottom): spoofing groups first, then behavior,
@@ -88,7 +89,14 @@ enum class NumericSetting(
         R.string.setting_speed_accuracy_description,
         R.string.setting_speed_accuracy_label,
         unit = "m/s", min = 0f, max = 100f, step = 1f
-    )
+    );
+
+    /** Number of fractional digits to show/keep: whole numbers for integer steps, otherwise one. */
+    val decimals: Int get() = if (step >= 1f) 0 else 1
+
+    /** Rounds [value] to [decimals] so the displayed text and the persisted value never diverge. */
+    fun roundValue(value: Float): Float =
+        if (decimals == 0) round(value) else round(value * 10f) / 10f
 }
 
 /**
