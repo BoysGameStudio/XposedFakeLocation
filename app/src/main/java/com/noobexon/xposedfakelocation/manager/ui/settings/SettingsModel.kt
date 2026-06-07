@@ -2,6 +2,14 @@ package com.noobexon.xposedfakelocation.manager.ui.settings
 
 import androidx.annotation.StringRes
 import com.noobexon.xposedfakelocation.R
+import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
 import kotlin.math.round
 
@@ -40,55 +48,57 @@ enum class NumericSetting(
     val unit: String,
     val min: Float,
     val max: Float,
-    val step: Float
+    val step: Float,
+    /** Value written when the user clears the field and blurs, matching [Constants]. */
+    val default: Float
 ) {
     RANDOMIZE_RADIUS(
         R.string.setting_randomize_title,
         R.string.setting_randomize_description,
         R.string.setting_randomize_radius_label,
-        unit = "m", min = 0f, max = 2000f, step = 0.1f
+        unit = "m", min = 0f, max = 2000f, step = 0.1f, default = DEFAULT_RANDOMIZE_RADIUS.toFloat()
     ),
     HORIZONTAL_ACCURACY(
         R.string.setting_horizontal_accuracy_title,
         R.string.setting_horizontal_accuracy_description,
         R.string.setting_horizontal_accuracy_label,
-        unit = "m", min = 0f, max = 100f, step = 1f
+        unit = "m", min = 0f, max = 100f, step = 1f, default = DEFAULT_ACCURACY.toFloat()
     ),
     VERTICAL_ACCURACY(
         R.string.setting_vertical_accuracy_title,
         R.string.setting_vertical_accuracy_description,
         R.string.setting_vertical_accuracy_label,
-        unit = "m", min = 0f, max = 100f, step = 1f
+        unit = "m", min = 0f, max = 100f, step = 1f, default = DEFAULT_VERTICAL_ACCURACY
     ),
     ALTITUDE(
         R.string.setting_altitude_title,
         R.string.setting_altitude_description,
         R.string.setting_altitude_label,
-        unit = "m", min = 0f, max = 2000f, step = 0.5f
+        unit = "m", min = 0f, max = 2000f, step = 0.5f, default = DEFAULT_ALTITUDE.toFloat()
     ),
     MEAN_SEA_LEVEL(
         R.string.setting_msl_title,
         R.string.setting_msl_description,
         R.string.setting_msl_label,
-        unit = "m", min = -400f, max = 2000f, step = 0.5f
+        unit = "m", min = -400f, max = 2000f, step = 0.5f, default = DEFAULT_MEAN_SEA_LEVEL.toFloat()
     ),
     MEAN_SEA_LEVEL_ACCURACY(
         R.string.setting_msl_accuracy_title,
         R.string.setting_msl_accuracy_description,
         R.string.setting_msl_accuracy_label,
-        unit = "m", min = 0f, max = 100f, step = 1f
+        unit = "m", min = 0f, max = 100f, step = 1f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
     ),
     SPEED(
         R.string.setting_speed_title,
         R.string.setting_speed_description,
         R.string.setting_speed_label,
-        unit = "m/s", min = 0f, max = 30f, step = 0.1f
+        unit = "m/s", min = 0f, max = 30f, step = 0.1f, default = DEFAULT_SPEED
     ),
     SPEED_ACCURACY(
         R.string.setting_speed_accuracy_title,
         R.string.setting_speed_accuracy_description,
         R.string.setting_speed_accuracy_label,
-        unit = "m/s", min = 0f, max = 100f, step = 1f
+        unit = "m/s", min = 0f, max = 100f, step = 1f, default = DEFAULT_SPEED_ACCURACY
     );
 
     /** Number of fractional digits to show/keep: whole numbers for integer steps, otherwise one. */

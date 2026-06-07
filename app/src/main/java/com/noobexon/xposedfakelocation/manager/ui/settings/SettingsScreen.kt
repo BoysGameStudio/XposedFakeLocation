@@ -873,12 +873,20 @@ private fun NumericSettingItem(
             }
 
             // Clamp + round the typed/dragged value and commit it, keeping field + slider in sync.
+            // If the field is blank on blur, fall back to the constant default for this setting.
             val commit: () -> Unit = {
-                val parsed = text.toFloatOrNull() ?: sliderValue
-                val committed = setting.roundValue(parsed.coerceIn(minValue, maxValue))
-                sliderValue = committed
-                text = formatNumericValue(committed, setting)
-                onValueChange(committed)
+                val parsed = text.toFloatOrNull()
+                if (parsed == null) {
+                    val defaultValue = setting.default
+                    sliderValue = defaultValue
+                    text = formatNumericValue(defaultValue, setting)
+                    onValueChange(defaultValue)
+                } else {
+                    val committed = setting.roundValue(parsed.coerceIn(minValue, maxValue))
+                    sliderValue = committed
+                    text = formatNumericValue(committed, setting)
+                    onValueChange(committed)
+                }
             }
 
             OutlinedTextField(
