@@ -91,6 +91,10 @@ import com.noobexon.xposedfakelocation.manager.localization.LocaleController
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+/**
+ * Spacing and shape constants shared across all setting row composables. Centralised here so any
+ * future design-token changes only require edits in one place.
+ */
 private object Dimensions {
     val SPACING_EXTRA_SMALL = 4.dp
     val SPACING_SMALL = 8.dp
@@ -101,13 +105,15 @@ private object Dimensions {
 }
 
 /**
- * Settings state holder. Owns the [SettingsViewModel], collects every preference flow, builds the
- * declarative [SettingEntry] list, and handles one-shot [SystemHooksEvent]s (lifecycle-aware) by
- * driving a snackbar / reboot dialog. Delegates all layout to the stateless [SettingsContent], which
- * keeps that part previewable and testable.
+ * Entry point for the settings destination. Acts as a state holder: owns the [SettingsViewModel],
+ * collects every preference [kotlinx.coroutines.flow.StateFlow], builds the declarative
+ * [SettingEntry] category list, and handles one-shot [SystemHooksEvent]s with lifecycle awareness
+ * (restart dialog / snackbar). All layout is delegated to the stateless [SettingsContent], keeping
+ * it previewable and testable independently.
  *
- * @param navController used to navigate back from the top app bar.
- * @param settingsViewModel state holder for all settings; defaults to the screen-scoped instance.
+ * @param navController Used to navigate back when the user taps the top-bar navigation icon.
+ * @param settingsViewModel Backing ViewModel; defaults to the screen-scoped instance from
+ *   [viewModel].
  */
 @Composable
 fun SettingsScreen(
@@ -117,7 +123,13 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) } // null = hidden; true/false = enabled/disabled
+
+    /**
+     * Drives the system-hooks restart dialog. `null` = dialog hidden; `true` = hooks were just
+     * enabled; `false` = hooks were just disabled. Two separate message strings exist for the two
+     * cases to give the user clear context.
+     */
+    var restartDialogEnabled by remember { mutableStateOf<Boolean?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, settingsViewModel) {
@@ -134,7 +146,6 @@ fun SettingsScreen(
         }
     }
 
-    // --- Collect all preference state ---
     val selectedLanguage = LanguageOption.fromTag(settingsViewModel.languageTag.collectAsStateWithLifecycle().value)
     val hideToast by settingsViewModel.hideFakeLocationToast.collectAsStateWithLifecycle()
     val broadcast by settingsViewModel.enableBroadcastControl.collectAsStateWithLifecycle()
@@ -156,7 +167,6 @@ fun SettingsScreen(
     val useSpeedAccuracy by settingsViewModel.useSpeedAccuracy.collectAsStateWithLifecycle()
     val speedAccuracy by settingsViewModel.speedAccuracy.collectAsStateWithLifecycle()
 
-    // --- Build the declarative entry list (category order = SettingsCategory order) ---
     val categories: List<Pair<SettingsCategory, List<SettingEntry>>> = listOf(
         SettingsCategory.LOCATION to listOf(
             SettingEntry.Numeric(NumericSetting.RANDOMIZE_RADIUS, useRandomize, settingsViewModel::setUseRandomize, randomizeRadius.toFloat()) { settingsViewModel.setRandomizeRadius(it.toDouble()) },
@@ -205,16 +215,22 @@ fun SettingsScreen(
 }
 
 /**
- * Stateless settings UI. Renders the branded top bar (with search + an overflow reset menu) and the
- * searchable list of [categories]; owns only UI-local state (search field, menu, dialog visibility).
- * All app/business actions arrive as callbacks, so this composable is previewable without a ViewModel.
+ * Stateless settings UI. Renders a branded [TopAppBar] with an expanding inline search field and
+ * an overflow "Reset" menu, then the scrollable list of [categories] grouped under [CategoryLabel]
+ * headers inside [Card]s. Owns only UI-local state (search text, menu visibility, dialog flags).
+ * All side-effectful actions arrive as callbacks so this composable can be previewed and tested
+ * without a ViewModel.
  *
- * @param categories grouped entries to render, already in display order.
- * @param snackbarHostState host for transient messages shown by the state holder.
- * @param restartDialogEnabled non-null shows the reboot-required dialog (`true` = enabled message).
- * @param onRestartDialogDismiss dismisses the reboot dialog.
- * @param onBack invoked when the user navigates back (and search is not open).
- * @param onResetConfirmed invoked when the user confirms "reset all settings".
+ * Tapping outside the search field or the content area collapses search. The system Back gesture
+ * also collapses search before navigating up.
+ *
+ * @param categories Grouped entries to render, already in the desired display order.
+ * @param snackbarHostState Host for transient one-line messages (errors, reset confirmation).
+ * @param restartDialogEnabled Non-null value shows the reboot-required dialog; `true` uses the
+ *   "hooks enabled" message, `false` uses the "hooks disabled" message, `null` hides the dialog.
+ * @param onRestartDialogDismiss Invoked when the restart dialog is acknowledged or dismissed.
+ * @param onBack Invoked when the user navigates back while search is not open.
+ * @param onResetConfirmed Invoked when the user confirms the "reset all settings" action.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -235,13 +251,11 @@ private fun SettingsContent(
     var menuExpanded by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
 
-    // Collapse search on Back before leaving the screen.
     BackHandler(enabled = searchActive) {
         searchActive = false
         query = ""
     }
 
-    // Only do the (per-entry getString) filtering work when actually searching.
     val filtered = if (query.isBlank()) {
         categories
     } else {
@@ -454,14 +468,28 @@ private fun SettingsContent(
     }
 }
 
-/** Walks the [Context] wrapper chain to the hosting [Activity], or null if there isn't one. */
+/**
+ * Walks the [Context] wrapper chain until it reaches the hosting [Activity]. Required because
+ * Compose's [LocalContext] returns a [ContextWrapper], not the raw [Activity], so a direct cast
+ * would fail.
+ *
+ * @return The hosting [Activity], or `null` if this context is not attached to one.
+ */
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
 
-/** Non-composable: the text searched for [entry] (title + description, plus language display name). */
+/**
+ * Builds the search corpus string for [entry]: its title and description joined with a space, with
+ * the selected language's display name appended for [SettingEntry.Language] entries. Called only
+ * when [query] is non-blank to avoid redundant [Context.getString] calls on every recomposition.
+ *
+ * @param entry The entry whose searchable text is needed.
+ * @param context Used to resolve string resources outside of Compose.
+ * @return A single concatenated string suitable for case-insensitive substring matching.
+ */
 private fun searchTextOf(entry: SettingEntry, context: Context): String {
     val base = context.getString(entry.titleRes) + " " + context.getString(entry.descriptionRes)
     return if (entry is SettingEntry.Language) {
@@ -477,14 +505,26 @@ private fun searchTextOf(entry: SettingEntry, context: Context): String {
     }
 }
 
-/** Case-insensitive substring match; an empty query matches everything. */
+/**
+ * Returns `true` if [haystack] contains [query] (case-insensitive, leading/trailing whitespace
+ * ignored). An empty or blank query always matches.
+ *
+ * @param query The user's search input.
+ * @param haystack The pre-built search corpus string from [searchTextOf].
+ */
 private fun entryMatches(query: String, haystack: String): Boolean {
     val q = query.trim()
     if (q.isEmpty()) return true
     return haystack.contains(q, ignoreCase = true)
 }
 
-/** Dispatches a [SettingEntry] to its row composable. */
+/**
+ * Dispatches a [SettingEntry] to its dedicated row composable. This indirection keeps the
+ * rendering loop in [SettingsContent] free of `when` branches and decouples each variant's
+ * composable from the list layout.
+ *
+ * @param entry The entry to render.
+ */
 @Composable
 private fun SettingEntryRow(entry: SettingEntry) {
     when (entry) {
@@ -508,7 +548,12 @@ private fun SettingEntryRow(entry: SettingEntry) {
     }
 }
 
-/** Compact uppercase category label in the primary color. */
+/**
+ * Uppercase section label rendered above each settings [Card]. Uses the primary colour and bold
+ * weight to visually separate categories without requiring a heavy header component.
+ *
+ * @param title Already-resolved (and uppercased by this composable) category name.
+ */
 @Composable
 private fun CategoryLabel(title: String) {
     Text(
@@ -525,14 +570,15 @@ private fun CategoryLabel(title: String) {
 }
 
 /**
- * Shared row header used by the boolean and numeric items: a [title] with an info button that
- * toggles [description], and a [trailing] slot (typically the enable switch).
+ * Reusable row header shared by boolean and numeric setting items. Lays out the [title] with a
+ * small info [IconButton] that toggles [description] inline below it, plus a [trailing] slot at
+ * the far end of the row (typically a [Switch]).
  *
- * @param title localized setting name.
- * @param description help text revealed by the info icon.
- * @param showTooltip whether [description] is currently shown.
- * @param onToggleTooltip toggles [showTooltip].
- * @param trailing content placed at the end of the row (e.g. a [Switch]).
+ * @param title Localized setting name shown in [MaterialTheme.typography.titleMedium].
+ * @param description Help text revealed when the info icon is tapped.
+ * @param showTooltip Whether [description] is currently visible below the title row.
+ * @param onToggleTooltip Invoked when the info icon is tapped to toggle [showTooltip].
+ * @param trailing Slot composable placed at the end of the row (e.g. [SettingSwitch]).
  */
 @Composable
 private fun SettingHeader(
@@ -582,7 +628,15 @@ private fun SettingHeader(
     }
 }
 
-/** A switch styled consistently for setting rows, with enable/disable [contentDescription]. */
+/**
+ * Consistently styled [Switch] for setting rows. Applies the app's colour scheme and provides
+ * context-aware accessibility descriptions so screen readers announce the current action ("Disable
+ * X" vs "Enable X") rather than the static state.
+ *
+ * @param title Localized setting name, used to build the content description.
+ * @param checked Current switch state.
+ * @param onCheckedChange Invoked with the new [Boolean] when the switch is toggled.
+ */
 @Composable
 private fun SettingSwitch(
     title: String,
@@ -607,13 +661,16 @@ private fun SettingSwitch(
 }
 
 /**
- * Language picker row. Shows the setting title with an info tooltip on the left and the currently
- * selected language plus an edit button on the right; tapping the row or the edit button opens a
- * single-choice [LanguageSelectionDialog]. Selecting a language there applies it immediately and
- * dismisses the dialog.
+ * Language picker row. Displays the setting title with an info tooltip button and the currently
+ * active language name on the right. Tapping anywhere on the row opens [LanguageSelectionDialog];
+ * selecting an option there applies it and dismisses the dialog.
  *
- * @param selectedLanguage currently active language.
- * @param onLanguageSelected invoked with the chosen option when the user picks one.
+ * Activity recreation (to apply the new locale) is the caller's responsibility and is triggered
+ * inside [onLanguageSelected] by [SettingsScreen].
+ *
+ * @param selectedLanguage Currently active [LanguageOption], shown in the collapsed row.
+ * @param onLanguageSelected Invoked with the chosen [LanguageOption] after the user taps an item
+ *   in the dialog.
  */
 @Composable
 private fun LanguageSettingItem(
@@ -659,7 +716,6 @@ private fun LanguageSettingItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = Dimensions.SPACING_SMALL)
             )
-
         }
 
         if (showTooltip) {
@@ -689,13 +745,16 @@ private fun LanguageSettingItem(
 }
 
 /**
- * Single-choice language dialog. Lists every [LanguageOption] as a radio row showing the language
- * in its own script (autonym) with the current-UI-language name as a subtitle when it differs;
- * [LanguageOption.SYSTEM] shows what the device locale currently resolves to.
+ * Single-choice language picker dialog. Each [LanguageOption] is displayed as a radio row with the
+ * language in its own script (autonym) as the primary label; the current-UI-language name appears
+ * as a subtitle when it differs from the autonym, providing clarity for unfamiliar scripts.
+ * [LanguageOption.SYSTEM] shows the device's resolved system language as its subtitle.
  *
- * @param selectedLanguage currently active language, pre-selected in the list.
- * @param onLanguageSelected invoked with the option the user taps.
- * @param onDismiss invoked when the dialog is dismissed without a selection.
+ * @param selectedLanguage Currently active option, pre-selected in the list.
+ * @param onLanguageSelected Invoked with the tapped [LanguageOption]; the dialog is then dismissed
+ *   by the caller ([LanguageSettingItem]).
+ * @param onDismiss Invoked when the dialog is dismissed without selecting an option (Cancel button
+ *   or outside tap).
  */
 @Composable
 private fun LanguageSelectionDialog(
@@ -763,7 +822,14 @@ private fun LanguageSelectionDialog(
     )
 }
 
-/** The display name shown for [option] in the collapsed language row (autonym, or system label). */
+/**
+ * Returns the display name for [option] as shown in the collapsed language row. For
+ * [LanguageOption.SYSTEM] this is the localised "Follow system" label; for all others the
+ * autonym (native script name) is preferred, falling back to the localised label if unavailable.
+ *
+ * @param option The [LanguageOption] whose display name is needed.
+ * @return A [String] ready for display in the settings row.
+ */
 @Composable
 private fun languageDisplayName(option: LanguageOption): String =
     if (option == LanguageOption.SYSTEM) {
@@ -773,13 +839,13 @@ private fun languageDisplayName(option: LanguageOption): String =
     }
 
 /**
- * A single on/off setting row: a [title] with an info button that reveals [description], plus a
- * trailing switch.
+ * A single on/off toggle setting row composed of a [SettingHeader] (title + info tooltip) and a
+ * trailing [SettingSwitch].
  *
- * @param title localized setting name.
- * @param description help text toggled by the info icon.
- * @param checked current switch state.
- * @param onCheckedChange invoked with the new state when the switch is toggled.
+ * @param title Localized name of the setting.
+ * @param description Help text toggled by the info icon.
+ * @param checked Current enabled state of the toggle.
+ * @param onCheckedChange Invoked with the new [Boolean] when the switch is toggled.
  */
 @Composable
 private fun BooleanSettingItem(
@@ -808,21 +874,29 @@ private fun BooleanSettingItem(
 }
 
 /**
- * A single numeric setting row driven by [setting]'s static metadata. Shows an enable switch and,
- * when enabled, an editable value field (with unit) plus a continuous slider bounded by
- * [NumericSetting.min]/[NumericSetting.max], with min/max end labels.
+ * A numeric setting row driven entirely by [setting]'s static metadata. Renders an enable
+ * [SettingSwitch] and, when enabled, an [OutlinedTextField] for direct value entry and a
+ * continuous [Slider] for drag input, with range end labels below.
  *
- * Editing is committed (via [onValueChange]) only when the user finishes — field blur / IME "Done",
- * or slider release — never on every keystroke, so the screen doesn't persist/recompose mid-edit.
- * Committed values are clamped to range and rounded to [NumericSetting.decimals] so the shown text
- * and the stored value always agree. The field/slider share an internal [Float] mirroring [value]
- * (synced via [LaunchedEffect] without clobbering an in-progress drag).
+ * **Edit lifecycle:** changes are committed (via [onValueChange]) only when the user finishes
+ * editing — on field blur, IME "Done", or slider release — never per keystroke or drag frame. This
+ * prevents excessive ViewModel writes and recompositions during in-progress input.
  *
- * @param setting static metadata (titles, unit, range) for this row.
- * @param useValue whether this setting is currently enabled.
- * @param onUseValueChange invoked when the enable switch is toggled.
- * @param value current committed value, in [setting]'s unit.
- * @param onValueChange invoked with the new value when the user finishes adjusting it.
+ * **Value invariant:** committed values are clamped to `[setting.min, setting.max]` and rounded to
+ * [NumericSetting.decimals] fractional places so the displayed field text and the persisted value
+ * always match. If the user clears the field and blurs, [NumericSetting.default] is written instead.
+ *
+ * **State sync:** a `LaunchedEffect(value)` updates the local [Float] mirror and field text when
+ * the external [value] changes (e.g. after a reset), but only if the local state differs — this
+ * avoids clobbering in-progress slider drags driven by the same source value.
+ *
+ * @param setting Static metadata (titles, unit, range, default, precision) for this row.
+ * @param useValue Whether this setting is currently enabled (controls switch state and
+ *   field/slider visibility).
+ * @param onUseValueChange Invoked when the enable switch is toggled.
+ * @param value Current committed value in [NumericSetting.unit].
+ * @param onValueChange Invoked with the final [Float] once the user finishes editing. Never called
+ *   mid-keystroke or mid-drag.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -872,8 +946,6 @@ private fun NumericSettingItem(
                 }
             }
 
-            // Clamp + round the typed/dragged value and commit it, keeping field + slider in sync.
-            // If the field is blank on blur, fall back to the constant default for this setting.
             val commit: () -> Unit = {
                 val parsed = text.toFloatOrNull()
                 if (parsed == null) {
@@ -893,7 +965,6 @@ private fun NumericSettingItem(
                 value = text,
                 onValueChange = { input ->
                     text = input
-                    // Track the slider live as the user types, but don't persist until they finish.
                     input.toFloatOrNull()?.let { sliderValue = it.coerceIn(minValue, maxValue) }
                 },
                 label = { Text(label) },
@@ -957,6 +1028,14 @@ private fun NumericSettingItem(
     }
 }
 
-/** Locale-stable value formatting (uses '.' so the field stays parseable by [String.toFloatOrNull]). */
+/**
+ * Formats [value] for display in a [NumericSettingItem] field. Always uses [Locale.US] (decimal
+ * point `'.'`) so [String.toFloatOrNull] can parse it back regardless of the device locale, and
+ * the stored value stays consistent with the displayed text.
+ *
+ * @param value The [Float] to format.
+ * @param setting Provides [NumericSetting.decimals] to determine the number of fractional places.
+ * @return A locale-stable string representation (e.g. `"12.5"`, `"100"`).
+ */
 private fun formatNumericValue(value: Float, setting: NumericSetting): String =
     String.format(Locale.US, "%.${setting.decimals}f", value)
