@@ -3,6 +3,7 @@ package com.noobexon.xposedfakelocation.manager.localization
 import androidx.annotation.StringRes
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
+import com.noobexon.xposedfakelocation.manager.localization.LanguageOption.Companion.fromTag
 import java.util.Locale
 
 private const val ENGLISH_LANGUAGE_TAG = "en"

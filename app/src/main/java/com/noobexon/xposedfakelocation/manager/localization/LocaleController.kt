@@ -6,6 +6,7 @@ import android.content.res.Resources
 import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.KEY_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.SHARED_PREFS_FILE
+import com.noobexon.xposedfakelocation.manager.localization.LocaleController.attachBaseContext
 import java.util.Locale
 
 /**
