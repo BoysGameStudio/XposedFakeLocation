@@ -48,7 +48,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
@@ -115,8 +115,8 @@ private object SettingDefinitions {
         DoubleSettingData(
             title = stringResource(R.string.setting_randomize_title),
             description = stringResource(R.string.setting_randomize_description),
-            useValueState = viewModel.useRandomize.collectAsState(),
-            valueState = viewModel.randomizeRadius.collectAsState(),
+            useValueState = viewModel.useRandomize.collectAsStateWithLifecycle(),
+            valueState = viewModel.randomizeRadius.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseRandomize,
             setValue = viewModel::setRandomizeRadius,
             label = stringResource(R.string.setting_randomize_radius_label),
@@ -128,8 +128,8 @@ private object SettingDefinitions {
         DoubleSettingData(
             title = stringResource(R.string.setting_horizontal_accuracy_title),
             description = stringResource(R.string.setting_horizontal_accuracy_description),
-            useValueState = viewModel.useAccuracy.collectAsState(),
-            valueState = viewModel.accuracy.collectAsState(),
+            useValueState = viewModel.useAccuracy.collectAsStateWithLifecycle(),
+            valueState = viewModel.accuracy.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseAccuracy,
             setValue = viewModel::setAccuracy,
             label = stringResource(R.string.setting_horizontal_accuracy_label),
@@ -141,8 +141,8 @@ private object SettingDefinitions {
         FloatSettingData(
             title = stringResource(R.string.setting_vertical_accuracy_title),
             description = stringResource(R.string.setting_vertical_accuracy_description),
-            useValueState = viewModel.useVerticalAccuracy.collectAsState(),
-            valueState = viewModel.verticalAccuracy.collectAsState(),
+            useValueState = viewModel.useVerticalAccuracy.collectAsStateWithLifecycle(),
+            valueState = viewModel.verticalAccuracy.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseVerticalAccuracy,
             setValue = viewModel::setVerticalAccuracy,
             label = stringResource(R.string.setting_vertical_accuracy_label),
@@ -154,8 +154,8 @@ private object SettingDefinitions {
         DoubleSettingData(
             title = stringResource(R.string.setting_altitude_title),
             description = stringResource(R.string.setting_altitude_description),
-            useValueState = viewModel.useAltitude.collectAsState(),
-            valueState = viewModel.altitude.collectAsState(),
+            useValueState = viewModel.useAltitude.collectAsStateWithLifecycle(),
+            valueState = viewModel.altitude.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseAltitude,
             setValue = viewModel::setAltitude,
             label = stringResource(R.string.setting_altitude_label),
@@ -167,8 +167,8 @@ private object SettingDefinitions {
         DoubleSettingData(
             title = stringResource(R.string.setting_msl_title),
             description = stringResource(R.string.setting_msl_description),
-            useValueState = viewModel.useMeanSeaLevel.collectAsState(),
-            valueState = viewModel.meanSeaLevel.collectAsState(),
+            useValueState = viewModel.useMeanSeaLevel.collectAsStateWithLifecycle(),
+            valueState = viewModel.meanSeaLevel.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseMeanSeaLevel,
             setValue = viewModel::setMeanSeaLevel,
             label = stringResource(R.string.setting_msl_label),
@@ -180,8 +180,8 @@ private object SettingDefinitions {
         FloatSettingData(
             title = stringResource(R.string.setting_msl_accuracy_title),
             description = stringResource(R.string.setting_msl_accuracy_description),
-            useValueState = viewModel.useMeanSeaLevelAccuracy.collectAsState(),
-            valueState = viewModel.meanSeaLevelAccuracy.collectAsState(),
+            useValueState = viewModel.useMeanSeaLevelAccuracy.collectAsStateWithLifecycle(),
+            valueState = viewModel.meanSeaLevelAccuracy.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseMeanSeaLevelAccuracy,
             setValue = viewModel::setMeanSeaLevelAccuracy,
             label = stringResource(R.string.setting_msl_accuracy_label),
@@ -193,8 +193,8 @@ private object SettingDefinitions {
         FloatSettingData(
             title = stringResource(R.string.setting_speed_title),
             description = stringResource(R.string.setting_speed_description),
-            useValueState = viewModel.useSpeed.collectAsState(),
-            valueState = viewModel.speed.collectAsState(),
+            useValueState = viewModel.useSpeed.collectAsStateWithLifecycle(),
+            valueState = viewModel.speed.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseSpeed,
             setValue = viewModel::setSpeed,
             label = stringResource(R.string.setting_speed_label),
@@ -206,8 +206,8 @@ private object SettingDefinitions {
         FloatSettingData(
             title = stringResource(R.string.setting_speed_accuracy_title),
             description = stringResource(R.string.setting_speed_accuracy_description),
-            useValueState = viewModel.useSpeedAccuracy.collectAsState(),
-            valueState = viewModel.speedAccuracy.collectAsState(),
+            useValueState = viewModel.useSpeedAccuracy.collectAsStateWithLifecycle(),
+            valueState = viewModel.speedAccuracy.collectAsStateWithLifecycle(),
             setUseValue = viewModel::setUseSpeedAccuracy,
             setValue = viewModel::setSpeedAccuracy,
             label = stringResource(R.string.setting_speed_accuracy_label),
@@ -230,7 +230,7 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
     val allSettings = SettingDefinitions.getSettings(settingsViewModel)
     val categories = SettingDefinitions.getCategories()
-    val selectedLanguage = LanguageOption.fromTag(settingsViewModel.languageTag.collectAsState().value)
+    val selectedLanguage = LanguageOption.fromTag(settingsViewModel.languageTag.collectAsStateWithLifecycle().value)
 
     val snackbarHostState = remember { SnackbarHostState() }
     // null = hidden; true = hooks were enabled; false = hooks were disabled
@@ -318,7 +318,7 @@ fun SettingsScreen(
                         BooleanSettingItem(
                             title = stringResource(R.string.setting_hide_toast_title),
                             description = stringResource(R.string.setting_hide_toast_description),
-                            checked = settingsViewModel.hideFakeLocationToast.collectAsState().value,
+                            checked = settingsViewModel.hideFakeLocationToast.collectAsStateWithLifecycle().value,
                             onCheckedChange = settingsViewModel::setHideFakeLocationToast
                         )
                     }
@@ -337,7 +337,7 @@ fun SettingsScreen(
                         BooleanSettingItem(
                             title = stringResource(R.string.setting_external_broadcast_title),
                             description = stringResource(R.string.setting_external_broadcast_description),
-                            checked = settingsViewModel.enableBroadcastControl.collectAsState().value,
+                            checked = settingsViewModel.enableBroadcastControl.collectAsStateWithLifecycle().value,
                             onCheckedChange = { newValue ->
                                 settingsViewModel.setEnableBroadcastControl(newValue)
                                 setControlReceiverEnabled(context, newValue)
@@ -359,7 +359,7 @@ fun SettingsScreen(
                         BooleanSettingItem(
                             title = stringResource(R.string.setting_system_hooks_title),
                             description = stringResource(R.string.setting_system_hooks_description),
-                            checked = settingsViewModel.enableSystemHooks.collectAsState().value,
+                            checked = settingsViewModel.enableSystemHooks.collectAsStateWithLifecycle().value,
                             onCheckedChange = settingsViewModel::setEnableSystemHooks
                         )
                     }
