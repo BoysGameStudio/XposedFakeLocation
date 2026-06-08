@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@Immutable
 data class TargetAppItem(
     val label: String,
     val packageName: String,
@@ -274,8 +275,9 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
 
     /**
      * Derives [TargetAppsUiState.filteredApps] from the current [TargetAppsUiState.apps],
-     * the three package sets, and [TargetAppsUiState.searchQuery]. Call at the end of
-     * every [_uiState] update that changes any of those five fields.
+     * the three package sets, [TargetAppsUiState.searchQuery], [TargetAppsUiState.showUserApps],
+     * and [TargetAppsUiState.showSystemApps]. Call at the end of every [_uiState] update
+     * that changes any of those seven fields.
      */
     private fun TargetAppsUiState.recompute(): TargetAppsUiState {
         val query = searchQuery.trim()
@@ -329,9 +331,12 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
         if (_uiState.value.isRefreshing) return
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
-            _uiState.update { state -> state.copy(apps = fetchInstalledApps()).recompute() }
-            refreshScope(sortApps = true)
-            _uiState.update { it.copy(isRefreshing = false) }
+            try {
+                _uiState.update { state -> state.copy(apps = fetchInstalledApps()).recompute() }
+                refreshScope(sortApps = true)
+            } finally {
+                _uiState.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 }
