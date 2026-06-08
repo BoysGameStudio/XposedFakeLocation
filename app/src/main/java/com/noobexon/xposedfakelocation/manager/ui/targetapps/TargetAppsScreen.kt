@@ -35,10 +35,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -251,15 +255,18 @@ private fun AppIcon(
     label: String
 ) {
     val context = LocalContext.current
-    val iconBitmap = remember(packageName) {
-        runCatching {
-            context.packageManager.getApplicationIcon(packageName).toBitmap()
-        }.getOrNull()
+    val iconBitmap by produceState<Bitmap?>(initialValue = null, packageName) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.packageManager.getApplicationIcon(packageName).toBitmap()
+            }.getOrNull()
+        }
     }
 
-    if (iconBitmap != null) {
+    val bitmap = iconBitmap
+    if (bitmap != null) {
         Image(
-            bitmap = iconBitmap.asImageBitmap(),
+            bitmap = bitmap.asImageBitmap(),
             contentDescription = stringResource(R.string.cd_app_icon, label),
             modifier = Modifier
                 .size(40.dp)
