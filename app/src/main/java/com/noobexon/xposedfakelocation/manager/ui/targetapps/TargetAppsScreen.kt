@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -428,7 +429,7 @@ private fun TargetAppRow(
                 } else {
                     IconButton(onClick = onRelaunch) {
                         Icon(
-                            Icons.Default.Refresh,
+                            Icons.Default.RestartAlt,
                             contentDescription = stringResource(R.string.target_apps_relaunch_cd, app.label)
                         )
                     }
