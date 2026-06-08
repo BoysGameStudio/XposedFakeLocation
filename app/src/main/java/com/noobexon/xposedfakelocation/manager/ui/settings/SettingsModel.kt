@@ -126,7 +126,18 @@ enum class NumericSetting(
 }
 
 /**
- * Declarative model for a single row in the settings list. Every variant exposes a stable [key]
+ * Stable string keys that uniquely identify each [SettingEntry] row within the settings list.
+ * Used by Compose's `key {}` block to anchor remembered state across recompositions (e.g. when
+ * search filtering reorders rows). These are internal identifiers — not shown to users.
+ */
+object SettingKeys {
+    const val HIDE_TOAST = "hide_toast"
+    const val SYSTEM_HOOKS = "system_hooks"
+    const val BROADCAST = "broadcast"
+    const val LANGUAGE = "language"
+}
+
+/** Every variant exposes a stable [key]
  * (used by Compose's `key {}` block to anchor remembered state across recompositions, e.g. during
  * search filtering) and the string resources required for search matching.
  *
@@ -192,7 +203,7 @@ sealed interface SettingEntry {
         val selected: LanguageOption,
         val onSelected: (LanguageOption) -> Unit
     ) : SettingEntry {
-        override val key: String get() = "language"
+        override val key: String get() = SettingKeys.LANGUAGE
         override val titleRes: Int get() = R.string.setting_language_title
         override val descriptionRes: Int get() = R.string.setting_language_description
     }

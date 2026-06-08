@@ -183,13 +183,13 @@ fun SettingsScreen(
             SettingEntry.Numeric(NumericSetting.SPEED_ACCURACY, useSpeedAccuracy, settingsViewModel::setUseSpeedAccuracy, speedAccuracy, settingsViewModel::setSpeedAccuracy)
         ),
         SettingsCategory.NOTIFICATIONS to listOf(
-            SettingEntry.Switch("hide_toast", R.string.setting_hide_toast_title, R.string.setting_hide_toast_description, hideToast, settingsViewModel::setHideFakeLocationToast)
+            SettingEntry.Switch(SettingKeys.HIDE_TOAST, R.string.setting_hide_toast_title, R.string.setting_hide_toast_description, hideToast, settingsViewModel::setHideFakeLocationToast)
         ),
         SettingsCategory.SYSTEM_HOOKS to listOf(
-            SettingEntry.Switch("system_hooks", R.string.setting_system_hooks_title, R.string.setting_system_hooks_description, systemHooks, settingsViewModel::setEnableSystemHooks)
+            SettingEntry.Switch(SettingKeys.SYSTEM_HOOKS, R.string.setting_system_hooks_title, R.string.setting_system_hooks_description, systemHooks, settingsViewModel::setEnableSystemHooks)
         ),
         SettingsCategory.EXTERNAL_CONTROL to listOf(
-            SettingEntry.Switch("broadcast", R.string.setting_external_broadcast_title, R.string.setting_external_broadcast_description, broadcast, settingsViewModel::setEnableBroadcastControl)
+            SettingEntry.Switch(SettingKeys.BROADCAST, R.string.setting_external_broadcast_title, R.string.setting_external_broadcast_description, broadcast, settingsViewModel::setEnableBroadcastControl)
         ),
         SettingsCategory.LANGUAGE to listOf(
             SettingEntry.Language(selectedLanguage) { option ->
