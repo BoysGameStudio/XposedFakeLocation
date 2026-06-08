@@ -26,64 +26,63 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 
 @Composable
-fun PermissionsScreen(navController: NavController, permissionsViewModel: PermissionsViewModel = viewModel()) {
+fun PermissionsScreen(
+    navController: NavController,
+    permissionsViewModel: PermissionsViewModel = viewModel()
+) {
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = context as Activity
 
-    if (activity == null) {
-        Text(stringResource(R.string.permissions_activity_error))
-        return
-    }
-
-    val hasPermissions by permissionsViewModel.hasPermissions
-    val permanentlyDenied by permissionsViewModel.permanentlyDenied
-    val permissionsChecked by permissionsViewModel.permissionsChecked
+    val uiState by permissionsViewModel.uiState.collectAsStateWithLifecycle()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { granted ->
             permissionsViewModel.updatePermissionsStatus(granted)
-            if (granted) {
-                navController.navigate(Screen.Map.route) {
-                    popUpTo(Screen.Permissions.route) { inclusive = true }
-                }
-            } else {
+            if (!granted) {
                 permissionsViewModel.checkIfPermanentlyDenied(activity)
             }
         }
     )
 
+    // Trigger the initial check once. Does not navigate — navigation is handled by the
+    // effect below that reacts to the resulting state change.
     LaunchedEffect(Unit) {
         permissionsViewModel.checkPermissions(context)
-        if (hasPermissions) {
+    }
+
+    // Navigate as soon as permissions are confirmed granted. Keyed on both fields so the
+    // effect restarts with fresh values whenever either changes — avoiding the stale-capture
+    // bug that would occur if this logic were inlined in LaunchedEffect(Unit).
+    LaunchedEffect(uiState.permissionsChecked, uiState.hasPermissions) {
+        if (uiState.permissionsChecked && uiState.hasPermissions) {
             navController.navigate(Screen.Map.route) {
                 popUpTo(Screen.Permissions.route) { inclusive = true }
             }
         }
     }
 
-    if (!permissionsChecked) {
+    if (!uiState.permissionsChecked) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator()
         }
-    } else if (!hasPermissions) {
+    } else if (!uiState.hasPermissions) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (permanentlyDenied) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (uiState.permanentlyDenied) {
                     PermanentlyDeniedScreen(context)
                 } else {
                     PermissionRequestScreen {
@@ -96,7 +95,7 @@ fun PermissionsScreen(navController: NavController, permissionsViewModel: Permis
 }
 
 @Composable
-fun PermanentlyDeniedScreen(context: Context) {
+private fun PermanentlyDeniedScreen(context: Context) {
     Text(
         text = stringResource(R.string.permissions_permanently_denied),
         style = MaterialTheme.typography.bodyLarge,
@@ -114,7 +113,7 @@ fun PermanentlyDeniedScreen(context: Context) {
 }
 
 @Composable
-fun PermissionRequestScreen(onGrantPermission: () -> Unit) {
+private fun PermissionRequestScreen(onGrantPermission: () -> Unit) {
     Text(
         text = stringResource(R.string.permissions_required),
         style = MaterialTheme.typography.bodyLarge,
