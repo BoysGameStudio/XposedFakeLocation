@@ -13,9 +13,16 @@
     <string name="action_add">添加</string>
     <string name="action_update">更新</string>
     <string name="action_go">前往</string>
+    <string name="action_reset">重置</string>
 
     <string name="cd_back">返回</string>
     <string name="cd_navigate_back">返回上一页</string>
+    <string name="cd_change_language">更改语言</string>
+    <string name="cd_search_settings">搜索设置</string>
+    <string name="cd_search_apps">搜索应用</string>
+    <string name="cd_clear_search">清除搜索</string>
+    <string name="cd_collapse_search">收起搜索</string>
+    <string name="cd_more_options">更多选项</string>
     <string name="cd_menu">菜单</string>
     <string name="cd_center">居中</string>
     <string name="cd_options">选项</string>
@@ -46,6 +53,7 @@
     <string name="dialog_module_not_active_message">XposedFakeLocation 模块未在你的 Xposed 管理器中激活。请启用模块并重启应用后继续。</string>
 
     <string name="category_language">语言</string>
+    <string name="category_appearance">外观</string>
     <string name="category_notifications">通知</string>
     <string name="category_external_control">外部控制</string>
     <string name="category_system_hooks">系统级 Hook</string>
@@ -53,8 +61,14 @@
     <string name="category_altitude">海拔</string>
     <string name="category_movement">移动</string>
 
+    <string name="setting_theme_title">应用主题</string>
+    <string name="setting_theme_description">设置管理器应用全局使用的配色方案。</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_dark">深色</string>
+
     <string name="setting_language_title">应用语言</string>
-    <string name="setting_language_description">选择管理器应用和 Xposed toast 提示使用的语言。</string>
+    <string name="setting_language_description">更改管理器应用及其 Xposed toast 提示所使用的语言。</string>
     <string name="setting_hide_toast_title">隐藏“虚拟位置已启用”提示</string>
     <string name="setting_hide_toast_description">禁止在模块于目标应用中激活时显示 toast 提示</string>
     <string name="setting_external_broadcast_title">允许外部广播控制</string>
@@ -70,7 +84,12 @@
     <string name="setting_disable">关闭 %1$s</string>
     <string name="setting_enable">开启 %1$s</string>
     <string name="setting_adjust_value">调整 %1$s 的值</string>
-    <string name="setting_value_display">%1$s：%2$s %3$s</string>
+    <string name="settings_search_hint">搜索设置</string>
+    <string name="settings_search_empty">未找到设置</string>
+    <string name="settings_reset_all">重置所有设置</string>
+    <string name="settings_reset_title">重置所有设置？</string>
+    <string name="settings_reset_message">这会将所有设置恢复为默认值，且无法撤消。</string>
+    <string name="settings_reset_done">设置已重置为默认值</string>
 
     <string name="setting_randomize_title">随机附近位置</string>
     <string name="setting_randomize_description">在指定半径内随机放置你的位置</string>
@@ -114,9 +133,10 @@
     <string name="toast_fake_location_set">已设置虚拟位置</string>
     <string name="toast_unset_fake_location">已取消虚拟位置</string>
     <string name="toast_user_location_not_available">用户位置不可用</string>
-    <string name="map_updating">正在更新地图...</string>
+    <string name="map_updating">正在更新地图…</string>
 
     <string name="field_name">名称</string>
+    <string name="field_description">描述（可选）</string>
     <string name="field_latitude">纬度</string>
     <string name="field_longitude">经度</string>
     <string name="field_template">模板</string>
@@ -139,8 +159,18 @@
     <string name="profile_advanced_description">覆盖此应用的高级设置</string>
     <string name="template_advanced_description">保存此模板前覆盖当前全局设置</string>
 
-    <string name="favorites_empty">还没有添加收藏。</string>
+    <string name="favorites_edit_title">编辑收藏</string>
+    <string name="favorites_empty">还没有收藏。</string>
+    <string name="favorites_empty_description">在地图上保存一个位置，它将显示在这里。</string>
+    <string name="favorites_delete_title">删除收藏？</string>
+    <string name="favorites_delete_message">删除"%1$s"？此操作无法撤销。</string>
+    <string name="favorites_delete_confirm">删除</string>
     <string name="target_apps_search_label">搜索应用或包名</string>
+    <string name="target_apps_no_results">没有与「%1$s」匹配的应用</string>
+    <string name="target_apps_filter_user">用户应用</string>
+    <string name="target_apps_filter_system">系统应用</string>
+    <string name="target_apps_filter_no_results">没有与当前筛选条件匹配的应用</string>
+    <string name="cd_filter_apps">筛选应用</string>
     <string name="target_apps_selected_count">已选择 %1$d 个</string>
     <string name="target_apps_module_inactive">模块未激活。请在 Xposed 管理器中启用 XposedFakeLocation 以选择目标应用。</string>
     <string name="target_apps_scope_request_failed">无法更新作用域：%1$s</string>

@@ -8,7 +8,56 @@ import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
-import com.noobexon.xposedfakelocation.data.*
+import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
+import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_THEME_OPTION
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_RANDOMIZE
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_ALTITUDE
+import com.noobexon.xposedfakelocation.data.KEY_ENABLE_BROADCAST_CONTROL
+import com.noobexon.xposedfakelocation.data.KEY_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
+import com.noobexon.xposedfakelocation.data.KEY_FAVORITES
+import com.noobexon.xposedfakelocation.data.KEY_MAP_ZOOM
+import com.noobexon.xposedfakelocation.data.KEY_HIDE_FAKE_LOCATION_TOAST
+import com.noobexon.xposedfakelocation.data.KEY_IS_PLAYING
+import com.noobexon.xposedfakelocation.data.KEY_LANGUAGE_TAG
+import com.noobexon.xposedfakelocation.data.KEY_LAST_CLICKED_LOCATION
+import com.noobexon.xposedfakelocation.data.KEY_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.KEY_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.KEY_SPEED
+import com.noobexon.xposedfakelocation.data.KEY_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_TARGET_APPS
+import com.noobexon.xposedfakelocation.data.KEY_THEME_OPTION
+import com.noobexon.xposedfakelocation.data.KEY_USE_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_ALTITUDE
+import com.noobexon.xposedfakelocation.data.KEY_USE_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.KEY_USE_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_RANDOMIZE
+import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED
+import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
+import com.noobexon.xposedfakelocation.data.SHARED_PREFS_FILE
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
 import com.noobexon.xposedfakelocation.manager.App
@@ -265,6 +314,15 @@ class PreferencesRepository(context: Context) {
         Log.d(tag, "Removed Favorite: $favorite")
     }
 
+    suspend fun updateFavorite(old: FavoriteLocation, new: FavoriteLocation) {
+        val updated = getFavorites().toMutableList().apply {
+            val index = indexOf(old)
+            if (index != -1) set(index, new)
+        }
+        saveFavorites(updated)
+        Log.d(tag, "Updated Favorite: $old -> $new")
+    }
+
     fun getFavorites(): List<FavoriteLocation> = parseFavorites(localPrefs.getString(KEY_FAVORITES, null))
 
     private fun saveFavorites(favorites: List<FavoriteLocation>) {
@@ -284,6 +342,16 @@ class PreferencesRepository(context: Context) {
     }
     // endregion
 
+    // region Map Zoom (local)
+    fun getMapZoom(): Double {
+        val bits = localPrefs.getLong(KEY_MAP_ZOOM, java.lang.Double.doubleToRawLongBits(DEFAULT_MAP_ZOOM))
+        return java.lang.Double.longBitsToDouble(bits)
+    }
+
+    fun saveMapZoom(zoom: Double) =
+        editLocal { putLong(KEY_MAP_ZOOM, java.lang.Double.doubleToRawLongBits(zoom)) }
+    // endregion
+
     // region Broadcast Control (local)
     fun getEnableBroadcastControlFlow(): Flow<Boolean> = localFlow(KEY_ENABLE_BROADCAST_CONTROL) { it.getBoolean(KEY_ENABLE_BROADCAST_CONTROL, DEFAULT_ENABLE_BROADCAST_CONTROL) }
     suspend fun saveEnableBroadcastControl(enable: Boolean) = editLocal { putBoolean(KEY_ENABLE_BROADCAST_CONTROL, enable) }
@@ -292,5 +360,10 @@ class PreferencesRepository(context: Context) {
     // region Language (local; shared with LocaleController)
     fun getLanguageTagFlow(): Flow<String> = localFlow(KEY_LANGUAGE_TAG) { it.getString(KEY_LANGUAGE_TAG, DEFAULT_LANGUAGE_TAG) ?: DEFAULT_LANGUAGE_TAG }
     suspend fun saveLanguageTag(languageTag: String) = editLocal { putString(KEY_LANGUAGE_TAG, languageTag) }
+    // endregion
+
+    // region Theme (local)
+    fun getThemeOptionFlow(): Flow<String> = localFlow(KEY_THEME_OPTION) { it.getString(KEY_THEME_OPTION, DEFAULT_THEME_OPTION) ?: DEFAULT_THEME_OPTION }
+    suspend fun saveThemeOption(themeTag: String) = editLocal { putString(KEY_THEME_OPTION, themeTag) }
     // endregion
 }

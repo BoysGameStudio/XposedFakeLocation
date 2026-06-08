@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.EditLocationAlt
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.Menu
@@ -18,9 +16,9 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -47,14 +45,28 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
-import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
-import com.noobexon.xposedfakelocation.manager.ui.drawer.DrawerContent
-import com.noobexon.xposedfakelocation.manager.ui.map.components.AddToFavoritesDialog
-import com.noobexon.xposedfakelocation.manager.ui.map.components.GoToPointDialog
-import com.noobexon.xposedfakelocation.manager.ui.map.components.MapViewContainer
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
+/**
+ * Top-level Map screen composable.
+ *
+ * Acts as the wiring layer between [MapViewModel] and the rest of the Map UI. Responsibilities:
+ * - Collects [MapViewModel.uiState] and distributes individual slices to child composables so that
+ *   only the composables that actually care about a piece of state recompose when it changes.
+ * - Hosts the [ModalNavigationDrawer] and manages its [drawerState], including intercepting the
+ *   system back gesture when the drawer is open, closing on scrim tap (via `gesturesEnabled =
+ *   drawerState.isOpen`), and re-opening it on re-entry via [MapViewModel.consumeReopenDrawerRequest].
+ * - Renders the [Scaffold] with [TopAppBar] (menu, center, overflow actions) and FAB
+ *   (play/stop spoofing toggle). The FAB is visually disabled when no marker has been placed.
+ * - Conditionally overlays [GoToPointDialog] and [AddToFavoritesDialog] based on the corresponding
+ *   `isVisible` flags in [MapUiState]; each dialog receives only the state slice it needs plus
+ *   typed callbacks, keeping dialogs fully stateless.
+ * - Delegates all map-view rendering and side effects to [MapViewContainer].
+ *
+ * @param navController Used by [DrawerContent] for in-app navigation.
+ * @param mapViewModel The screen's ViewModel; injected at the [NavHost] level.
+ */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
@@ -65,8 +77,8 @@ fun MapScreen(
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying = uiState.isPlaying
     val isFabClickable = uiState.isFabClickable
-    val showGoToPointDialog = uiState.goToPointDialogState == DialogState.Visible
-    val showAddToFavoritesDialog = uiState.addToFavoritesDialogState == DialogState.Visible
+    val showGoToPointDialog = uiState.isGoToPointDialogVisible
+    val showAddToFavoritesDialog = uiState.isAddToFavoritesDialogVisible
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showOptionsMenu by remember { mutableStateOf(false) }
@@ -77,16 +89,33 @@ fun MapScreen(
         scope.launch { drawerState.close() }
     }
 
+    // When returning to the map after navigating away via the drawer, restore the drawer open.
+    LaunchedEffect(Unit) {
+        if (mapViewModel.consumeReopenDrawerRequest()) {
+            drawerState.open()
+        }
+    }
+
+    // Navigate to Favorites after a favorite is successfully saved.
+    LaunchedEffect(mapViewModel.navigateToFavoritesEvent) {
+        mapViewModel.navigateToFavoritesEvent.collect {
+            navController.navigate(Screen.Favorites.route) { launchSingleTop = true }
+        }
+    }
+
     ModalNavigationDrawer(
         drawerContent = {
             DrawerContent(
                 onCloseDrawer = { scope.launch { drawerState.close() } },
+                onNavigate = { mapViewModel.requestReopenDrawer() },
                 navController = navController
             )
         },
         scrimColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
         drawerState = drawerState,
-        gesturesEnabled = false,
+        // Only enable gestures while the drawer is open so that tapping the scrim (outside the
+        // drawer) closes it. When closed, gestures are off so map pan/zoom is not intercepted.
+        gesturesEnabled = drawerState.isOpen,
         modifier = Modifier.fillMaxSize()
     ) {
         Scaffold(
@@ -140,19 +169,6 @@ fun MapScreen(
                                 onClick = {
                                     showOptionsMenu = false
                                     mapViewModel.showAddToFavoritesDialog()
-                                }
-                            )
-                            DropdownMenuItem(
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = stringResource(R.string.screen_favorites)
-                                    )
-                                },
-                                text = { Text(stringResource(R.string.screen_favorites)) },
-                                onClick = {
-                                    showOptionsMenu = false
-                                    navController.navigate(Screen.Favorites.route)
                                 }
                             )
                             DropdownMenuItem(
@@ -220,39 +236,54 @@ fun MapScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                MapViewContainer(mapViewModel)
+                MapViewContainer(
+                    isLoading = uiState.isLoading,
+                    lastClickedLocation = uiState.lastClickedLocation,
+                    userLocation = uiState.userLocation,
+                    isPlaying = uiState.isPlaying,
+                    mapZoom = uiState.mapZoom,
+                    hasResolvedInitialLocation = uiState.hasResolvedInitialLocation,
+                    goToPointEvent = mapViewModel.goToPointEvent,
+                    centerMapEvent = mapViewModel.centerMapEvent,
+                    onClickedLocationChange = mapViewModel::updateClickedLocation,
+                    onUserLocationChange = mapViewModel::updateUserLocation,
+                    onMapZoomChange = mapViewModel::updateMapZoom,
+                    onLoadingFinished = mapViewModel::setLoadingFinished,
+                    onInitialLocationResolved = mapViewModel::markInitialLocationResolved,
+                )
             }
         }
 
         if (showGoToPointDialog) {
+            val goToPoint = uiState.goToPointState
             GoToPointDialog(
-                onDismissRequest = { mapViewModel.hideGoToPointDialog() },
-                onGoToPoint = { latitude, longitude ->
-                    mapViewModel.goToPoint(latitude, longitude)
-                    mapViewModel.hideGoToPointDialog()
-                },
-                mapViewModel = mapViewModel
+                latitude = goToPoint.latitude.value,
+                longitude = goToPoint.longitude.value,
+                latitudeErrorRes = goToPoint.latitude.errorMessageRes,
+                longitudeErrorRes = goToPoint.longitude.errorMessageRes,
+                onLatitudeChange = mapViewModel::onGoToPointLatitudeChange,
+                onLongitudeChange = mapViewModel::onGoToPointLongitudeChange,
+                onConfirm = mapViewModel::confirmGoToPoint,
+                onDismissRequest = mapViewModel::hideGoToPointDialog,
             )
         }
 
         if (showAddToFavoritesDialog) {
-            val lastClickedLocation = uiState.lastClickedLocation
-
-            LaunchedEffect(lastClickedLocation) {
-                mapViewModel.prefillCoordinatesFromMarker(
-                    lastClickedLocation?.latitude,
-                    lastClickedLocation?.longitude
-                )
-            }
-
+            val favorite = uiState.addToFavoritesState
             AddToFavoritesDialog(
-                mapViewModel = mapViewModel,
-                onDismissRequest = { mapViewModel.hideAddToFavoritesDialog() },
-                onAddFavorite = { name, latitude, longitude ->
-                    val favorite = FavoriteLocation(name, latitude, longitude)
-                    mapViewModel.addFavoriteLocation(favorite)
-                    mapViewModel.hideAddToFavoritesDialog()
-                }
+                name = favorite.name.value,
+                description = favorite.description.value,
+                latitude = favorite.latitude.value,
+                longitude = favorite.longitude.value,
+                nameErrorRes = favorite.name.errorMessageRes,
+                latitudeErrorRes = favorite.latitude.errorMessageRes,
+                longitudeErrorRes = favorite.longitude.errorMessageRes,
+                onNameChange = mapViewModel::onFavoriteNameChange,
+                onDescriptionChange = mapViewModel::onFavoriteDescriptionChange,
+                onLatitudeChange = mapViewModel::onFavoriteLatitudeChange,
+                onLongitudeChange = mapViewModel::onFavoriteLongitudeChange,
+                onConfirm = mapViewModel::confirmAddFavorite,
+                onDismissRequest = mapViewModel::hideAddToFavoritesDialog,
             )
         }
     }

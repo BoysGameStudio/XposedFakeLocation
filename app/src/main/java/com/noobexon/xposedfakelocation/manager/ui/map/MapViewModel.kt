@@ -7,275 +7,402 @@ import androidx.lifecycle.viewModelScope
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
 
-/**
- * Sealed classes to represent different dialog states
- */
-sealed class DialogState {
-    object Hidden : DialogState()
-    object Visible : DialogState()
-}
+/** Valid latitude values accepted by the "Go to point" and "Add to favorites" dialogs. */
+private val LATITUDE_RANGE = -90.0..90.0
+
+/** Valid longitude values accepted by the "Go to point" and "Add to favorites" dialogs. */
+private val LONGITUDE_RANGE = -180.0..180.0
 
 /**
- * Sealed class to represent different loading states
- */
-sealed class LoadingState {
-    object Loading : LoadingState()
-    object Loaded : LoadingState()
-}
-
-/**
- * ViewModel for the Map screen that manages map-related state and operations.
+ * ViewModel for the Map screen.
+ *
+ * Owns all Map-screen state via a single [uiState] [StateFlow], exposes one-shot camera events as
+ * [Channel]-backed [Flow]s, and provides typed mutation functions so the UI never writes directly to
+ * [_uiState].
+ *
+ * **Persistence**: [MapUiState.isPlaying], [MapUiState.lastClickedLocation], and [MapUiState.mapZoom]
+ * are kept in sync with [PreferencesRepository] — all three are read on init and written back
+ * whenever they change, so they survive the app being fully closed and reopened.
+ *
+ * **Dialog lifecycle**: each dialog has a paired `show*` / `hide*` function that guards setup and
+ * teardown. The corresponding `confirm*` function validates input; on success it acts (emits event
+ * or persists) and dismisses; on failure it writes error strings into the state so the dialog can
+ * render inline validation messages.
+ *
+ * **Drawer re-open**: a simple boolean flag ([reopenDrawerRequested]) stores the intent to re-open
+ * the navigation drawer when the map screen is returned to after a drawer-triggered navigation.
+ * The flag is consumed exactly once via [consumeReopenDrawerRequest].
  */
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
 
-    /**
-     * Represents field input state with value and validation error message
-     */
-    data class InputFieldState(val value: String = "", @StringRes val errorMessageRes: Int? = null)
-
-    /**
-     * Represents the UI state for the favorites input dialog
-     */
-    data class FavoritesInputState(
-        val name: InputFieldState = InputFieldState(),
-        val latitude: InputFieldState = InputFieldState(),
-        val longitude: InputFieldState = InputFieldState()
+    private val _uiState = MutableStateFlow(
+        MapUiState(mapZoom = preferencesRepository.getMapZoom())
     )
 
-    /**
-     * Represents the complete UI state for the Map screen
-     */
-    data class MapUiState(
-        val isPlaying: Boolean = false,
-        val lastClickedLocation: GeoPoint? = null,
-        val userLocation: GeoPoint? = null,
-        val loadingState: LoadingState = LoadingState.Loading,
-        val mapZoom: Double? = null,
-        val goToPointDialogState: DialogState = DialogState.Hidden,
-        val addToFavoritesState: FavoritesInputState = FavoritesInputState(),
-        val addToFavoritesDialogState: DialogState = DialogState.Hidden,
-        val goToPointState: Pair<InputFieldState, InputFieldState> = InputFieldState() to InputFieldState(),
-    ) {
-        val isFabClickable: Boolean
-            get() = lastClickedLocation != null
-    }
-
-    // Private mutable state
-    private val _uiState = MutableStateFlow(MapUiState())
-    
-    // Public immutable state
+    /** Snapshot of the full Map-screen UI state, updated atomically. */
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
-    // Events
-    private val _goToPointEvent = MutableSharedFlow<GeoPoint>()
-    val goToPointEvent: SharedFlow<GeoPoint> = _goToPointEvent.asSharedFlow()
+    /**
+     * One-shot event that tells [MapViewEffects.HandleGoToPointEvent] to animate the camera to a
+     * specific coordinate and place the spoof marker there.
+     */
+    private val _goToPointEvent = Channel<GeoPoint>(Channel.BUFFERED)
+    val goToPointEvent: Flow<GeoPoint> = _goToPointEvent.receiveAsFlow()
 
-    private val _centerMapEvent = MutableSharedFlow<Unit>()
-    val centerMapEvent: SharedFlow<Unit> = _centerMapEvent.asSharedFlow()
+    /**
+     * One-shot event that tells [MapViewEffects.HandleCenterMapEvent] to animate the camera back
+     * to the user's real location.
+     */
+    private val _centerMapEvent = Channel<Unit>(Channel.BUFFERED)
+    val centerMapEvent: Flow<Unit> = _centerMapEvent.receiveAsFlow()
+
+    /**
+     * One-shot event emitted after a favorite is successfully saved. [MapScreen] collects this
+     * and navigates the user to the Favorites screen so they can immediately see the new entry.
+     */
+    private val _navigateToFavoritesEvent = Channel<Unit>(Channel.BUFFERED)
+    val navigateToFavoritesEvent: Flow<Unit> = _navigateToFavoritesEvent.receiveAsFlow()
 
     init {
         viewModelScope.launch {
-            // Load initial isPlaying state
-            preferencesRepository.getIsPlayingFlow().collectLatest { isPlaying ->
+            preferencesRepository.getIsPlayingFlow().collect { isPlaying ->
                 _uiState.update { it.copy(isPlaying = isPlaying) }
             }
         }
-        
+
         viewModelScope.launch {
-            // Load initial lastClickedLocation
-            preferencesRepository.getLastClickedLocationFlow().collectLatest { location ->
+            preferencesRepository.getLastClickedLocationFlow().collect { location ->
                 val geoPoint = location?.let { GeoPoint(it.latitude, it.longitude) }
                 _uiState.update { it.copy(lastClickedLocation = geoPoint) }
             }
         }
     }
 
+    /**
+     * Toggles location-spoofing on/off and persists the new value.
+     *
+     * The optimistic local update ensures the FAB reflects the new state immediately, while the
+     * coroutine write to [PreferencesRepository] happens asynchronously.
+     */
     fun togglePlaying() {
         val currentIsPlaying = !_uiState.value.isPlaying
         _uiState.update { it.copy(isPlaying = currentIsPlaying) }
-        
+
         viewModelScope.launch {
             preferencesRepository.saveIsPlaying(currentIsPlaying)
         }
     }
 
+    /**
+     * Updates the cached real-device location that is used for the "center on me" action and for
+     * restoring the camera on re-entry when no spoof marker exists.
+     *
+     * @param location The most-recent device location reported by the location overlay.
+     */
     fun updateUserLocation(location: GeoPoint) {
         _uiState.update { it.copy(userLocation = location) }
     }
 
+    /**
+     * Sets or clears the spoof-target marker and persists the change.
+     *
+     * Passing `null` removes the marker and clears the persisted location so that reopening the
+     * app starts with a clean slate.
+     *
+     * @param geoPoint The new spoof target, or `null` to clear it.
+     */
     fun updateClickedLocation(geoPoint: GeoPoint?) {
         _uiState.update { it.copy(lastClickedLocation = geoPoint) }
-        
+
         viewModelScope.launch {
             geoPoint?.let {
-                preferencesRepository.saveLastClickedLocation(
-                    it.latitude,
-                    it.longitude
-                )
+                preferencesRepository.saveLastClickedLocation(it.latitude, it.longitude)
             } ?: preferencesRepository.clearLastClickedLocation()
         }
     }
 
-    fun addFavoriteLocation(favoriteLocation: FavoriteLocation) {
-        viewModelScope.launch {
-            preferencesRepository.addFavorite(favoriteLocation)
-        }
+    /**
+     * Stores the map's current zoom level so it can be restored when the screen is re-entered or
+     * the app is reopened after being fully closed. Called from [MapViewEffects.ManageMapViewLifecycle]
+     * on dispose, capturing the zoom at the exact moment the map is torn down.
+     *
+     * @param zoom The zoom level to persist.
+     */
+    fun updateMapZoom(zoom: Double) {
+        _uiState.update { it.copy(mapZoom = zoom) }
+        preferencesRepository.saveMapZoom(zoom)
     }
 
-    // Update specific fields in the FavoritesInputState
-    fun updateAddToFavoritesField(fieldName: String, newValue: String) {
-        val currentState = _uiState.value.addToFavoritesState
-        val errorMessageRes = when (fieldName) {
-            "name" -> if (newValue.isBlank()) R.string.validation_name_required else null
-            "latitude" -> validateInput(newValue, -90.0..90.0, R.string.validation_latitude_range)
-            "longitude" -> validateInput(newValue, -180.0..180.0, R.string.validation_longitude_range)
-            else -> null
-        }
-
-        val updatedState = when (fieldName) {
-            "name" -> currentState.copy(name = currentState.name.copy(value = newValue, errorMessageRes = errorMessageRes))
-            "latitude" -> currentState.copy(latitude = currentState.latitude.copy(value = newValue, errorMessageRes = errorMessageRes))
-            "longitude" -> currentState.copy(longitude = currentState.longitude.copy(value = newValue, errorMessageRes = errorMessageRes))
-            else -> currentState
-        }
-        
-        _uiState.update { it.copy(addToFavoritesState = updatedState) }
-    }
-
-    // Go to point logic
-    fun goToPoint(latitude: Double, longitude: Double) {
-        viewModelScope.launch {
-            _goToPointEvent.emit(GeoPoint(latitude, longitude))
-        }
-    }
-
-    // Update specific fields in the GoToPointDialog state
-    fun updateGoToPointField(fieldName: String, newValue: String) {
-        val (latitudeField, longitudeField) = _uiState.value.goToPointState
-        val updatedGoToPointState = when (fieldName) {
-            "latitude" -> latitudeField.copy(value = newValue) to longitudeField
-            "longitude" -> latitudeField to longitudeField.copy(value = newValue)
-            else -> latitudeField to longitudeField
-        }
-        
-        _uiState.update { it.copy(goToPointState = updatedGoToPointState) }
-    }
-
-    // Center map
-    fun triggerCenterMapEvent() {
-        viewModelScope.launch {
-            _centerMapEvent.emit(Unit)
-        }
-    }
-
-    fun setLoadingStarted() {
-        _uiState.update { it.copy(loadingState = LoadingState.Loading) }
-    }
-
-    // Set loading finished
+    /**
+     * Clears the loading state once [MapViewEffects.CenterMapOnUserLocation] has finished
+     * determining the initial camera position. After this call [MapUiState.isLoading] is `false`
+     * and the map view becomes visible.
+     */
     fun setLoadingFinished() {
-        _uiState.update { it.copy(loadingState = LoadingState.Loaded) }
+        _uiState.update { it.copy(isLoading = false) }
     }
 
-    // Dialog show/hide logic
-    fun showGoToPointDialog() { 
-        _uiState.update { it.copy(goToPointDialogState = DialogState.Visible) }
+    /** Marks that the one-time initial camera positioning has completed. */
+    fun markInitialLocationResolved() {
+        _uiState.update { it.copy(hasResolvedInitialLocation = true) }
     }
-    
+
+    /**
+     * One-shot flag that signals the map screen should reopen the navigation drawer when it becomes
+     * active again. Set when the user navigates away via the drawer; consumed once on re-entry.
+     * Survives the map composable being destroyed because it lives in the ViewModel.
+     */
+    private var reopenDrawerRequested = false
+
+    /** Records that the drawer should be reopened the next time the map screen is shown. */
+    fun requestReopenDrawer() {
+        reopenDrawerRequested = true
+    }
+
+    /** Returns whether a drawer-reopen was requested, consuming the one-shot flag. */
+    fun consumeReopenDrawerRequest(): Boolean {
+        val requested = reopenDrawerRequested
+        reopenDrawerRequested = false
+        return requested
+    }
+
+    /**
+     * Enqueues a [centerMapEvent] to animate the camera back to the user's real location.
+     * Called when the user taps the "My Location" icon in the top bar.
+     */
+    fun triggerCenterMapEvent() {
+        _centerMapEvent.trySend(Unit)
+    }
+
+    // ---- Go to point dialog ----
+
+    /** Makes the "Go to point" dialog visible. */
+    fun showGoToPointDialog() {
+        _uiState.update { it.copy(isGoToPointDialogVisible = true) }
+    }
+
+    /**
+     * Dismisses the "Go to point" dialog and resets its input state so it is clean the next time
+     * it is opened.
+     */
     fun hideGoToPointDialog() {
-        _uiState.update { it.copy(goToPointDialogState = DialogState.Hidden) }
-        clearGoToPointInputs()
+        _uiState.update {
+            it.copy(isGoToPointDialogVisible = false, goToPointState = GoToPointInputState())
+        }
     }
 
-    fun showAddToFavoritesDialog() { 
-        _uiState.update { it.copy(addToFavoritesDialogState = DialogState.Visible) }
-    }
-    
-    fun hideAddToFavoritesDialog() {
-        _uiState.update { it.copy(addToFavoritesDialogState = DialogState.Hidden) }
-        clearAddToFavoritesInputs()
+    /**
+     * Updates the latitude field of the "Go to point" dialog without triggering validation.
+     * Validation only runs on [confirmGoToPoint].
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onGoToPointLatitudeChange(value: String) {
+        _uiState.update {
+            it.copy(
+                goToPointState = it.goToPointState.copy(
+                    latitude = it.goToPointState.latitude.copy(value = value)
+                )
+            )
+        }
     }
 
-    // Helper for input validation
-    private fun validateInput(
-        input: String, range: ClosedRange<Double>, @StringRes errorMessageRes: Int
-    ): Int? {
-        val value = input.toDoubleOrNull()
-        return if (value == null || value !in range) errorMessageRes else null
+    /**
+     * Updates the longitude field of the "Go to point" dialog without triggering validation.
+     * Validation only runs on [confirmGoToPoint].
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onGoToPointLongitudeChange(value: String) {
+        _uiState.update {
+            it.copy(
+                goToPointState = it.goToPointState.copy(
+                    longitude = it.goToPointState.longitude.copy(value = value)
+                )
+            )
+        }
     }
 
-    // Validate GoToPoint inputs
-    fun validateAndGo(onSuccess: (latitude: Double, longitude: Double) -> Unit) {
-        val (latField, lonField) = _uiState.value.goToPointState
-        val latitudeError = validateInput(latField.value, -90.0..90.0, R.string.validation_latitude_range)
-        val longitudeError = validateInput(lonField.value, -180.0..180.0, R.string.validation_longitude_range)
-
-        val updatedGoToPointState = latField.copy(errorMessageRes = latitudeError) to lonField.copy(errorMessageRes = longitudeError)
-        _uiState.update { it.copy(goToPointState = updatedGoToPointState) }
+    /**
+     * Validates the "Go to point" inputs. On success, emits a [goToPointEvent] and dismisses the
+     * dialog; on failure, updates the input fields with validation errors and keeps the dialog open.
+     */
+    fun confirmGoToPoint() {
+        val state = _uiState.value.goToPointState
+        val latitudeError = validateInput(state.latitude.value, LATITUDE_RANGE, R.string.validation_latitude_range)
+        val longitudeError = validateInput(state.longitude.value, LONGITUDE_RANGE, R.string.validation_longitude_range)
 
         if (latitudeError == null && longitudeError == null) {
-            onSuccess(latField.value.toDouble(), lonField.value.toDouble())
-        }
-    }
-
-    // Clear GoToPoint inputs
-    fun clearGoToPointInputs() {
-        _uiState.update { 
-            it.copy(goToPointState = InputFieldState() to InputFieldState())
-        }
-    }
-
-    // Prefill AddToFavorites latitude/longitude with marker values (if available)
-    fun prefillCoordinatesFromMarker(latitude: Double?, longitude: Double?) {
-        if (latitude != null && longitude != null) {
-            val latField = InputFieldState(value = latitude.toString())
-            val lngField = InputFieldState(value = longitude.toString())
-            
-            _uiState.update { currentState ->
-                val favState = currentState.addToFavoritesState
-                currentState.copy(
-                    addToFavoritesState = favState.copy(
-                        latitude = latField,
-                        longitude = lngField
+            _goToPointEvent.trySend(GeoPoint(state.latitude.value.toDouble(), state.longitude.value.toDouble()))
+            hideGoToPointDialog()
+        } else {
+            _uiState.update {
+                it.copy(
+                    goToPointState = it.goToPointState.copy(
+                        latitude = it.goToPointState.latitude.copy(errorMessageRes = latitudeError),
+                        longitude = it.goToPointState.longitude.copy(errorMessageRes = longitudeError)
                     )
                 )
             }
         }
     }
 
-    // Validate and add favorite location
-    fun validateAndAddFavorite(onSuccess: (name: String, latitude: Double, longitude: Double) -> Unit) {
-        val currentState = _uiState.value.addToFavoritesState
+    // ---- Add to favorites dialog ----
 
-        val latitudeError = validateInput(currentState.latitude.value, -90.0..90.0, R.string.validation_latitude_range)
-        val longitudeError = validateInput(currentState.longitude.value, -180.0..180.0, R.string.validation_longitude_range)
-        val nameError = if (currentState.name.value.isBlank()) R.string.validation_name_required else null
-
-        val updatedState = currentState.copy(
-            name = currentState.name.copy(errorMessageRes = nameError),
-            latitude = currentState.latitude.copy(errorMessageRes = latitudeError),
-            longitude = currentState.longitude.copy(errorMessageRes = longitudeError)
-        )
-        
-        _uiState.update { it.copy(addToFavoritesState = updatedState) }
-
-        if (nameError == null && latitudeError == null && longitudeError == null) {
-            onSuccess(currentState.name.value, currentState.latitude.value.toDouble(), currentState.longitude.value.toDouble())
+    /**
+     * Makes the "Add to favorites" dialog visible, pre-filling the latitude and longitude fields
+     * from the currently placed spoof marker (if any) so the user only needs to supply a name.
+     */
+    fun showAddToFavoritesDialog() {
+        val marker = _uiState.value.lastClickedLocation
+        _uiState.update {
+            it.copy(
+                isAddToFavoritesDialogVisible = true,
+                addToFavoritesState = if (marker != null) {
+                    it.addToFavoritesState.copy(
+                        latitude = InputFieldState(value = marker.latitude.toString()),
+                        longitude = InputFieldState(value = marker.longitude.toString())
+                    )
+                } else {
+                    it.addToFavoritesState
+                }
+            )
         }
     }
 
-    // Clear AddToFavorites inputs
-    fun clearAddToFavoritesInputs() {
-        _uiState.update { it.copy(addToFavoritesState = FavoritesInputState()) }
+    /**
+     * Dismisses the "Add to favorites" dialog and resets its input state so it is clean the next
+     * time it is opened.
+     */
+    fun hideAddToFavoritesDialog() {
+        _uiState.update {
+            it.copy(isAddToFavoritesDialogVisible = false, addToFavoritesState = FavoritesInputState())
+        }
     }
-    
-    // Update map zoom level
-    fun updateMapZoom(zoom: Double) {
-        _uiState.update { it.copy(mapZoom = zoom) }
+
+    /**
+     * Updates the name field of the "Add to favorites" dialog with inline live validation — the
+     * field is marked as an error immediately if the value is blank.
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onFavoriteNameChange(value: String) {
+        val error = if (value.isBlank()) R.string.validation_name_required else null
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    name = it.addToFavoritesState.name.copy(value = value, errorMessageRes = error)
+                )
+            )
+        }
+    }
+
+    /**
+     * Updates the optional description field of the "Add to favorites" dialog. No validation is
+     * applied — description is always optional and may be left blank.
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onFavoriteDescriptionChange(value: String) {
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    description = it.addToFavoritesState.description.copy(value = value)
+                )
+            )
+        }
+    }
+
+    /**
+     * Updates the latitude field of the "Add to favorites" dialog with inline live validation.
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onFavoriteLatitudeChange(value: String) {
+        val error = validateInput(value, LATITUDE_RANGE, R.string.validation_latitude_range)
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    latitude = it.addToFavoritesState.latitude.copy(value = value, errorMessageRes = error)
+                )
+            )
+        }
+    }
+
+    /**
+     * Updates the longitude field of the "Add to favorites" dialog with inline live validation.
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onFavoriteLongitudeChange(value: String) {
+        val error = validateInput(value, LONGITUDE_RANGE, R.string.validation_longitude_range)
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    longitude = it.addToFavoritesState.longitude.copy(value = value, errorMessageRes = error)
+                )
+            )
+        }
+    }
+
+    /**
+     * Validates the "Add to favorites" inputs. On success, persists the favorite and dismisses the
+     * dialog; on failure, updates the input fields with validation errors and keeps the dialog open.
+     */
+    fun confirmAddFavorite() {
+        val state = _uiState.value.addToFavoritesState
+        val nameError = if (state.name.value.isBlank()) R.string.validation_name_required else null
+        val latitudeError = validateInput(state.latitude.value, LATITUDE_RANGE, R.string.validation_latitude_range)
+        val longitudeError = validateInput(state.longitude.value, LONGITUDE_RANGE, R.string.validation_longitude_range)
+
+        if (nameError == null && latitudeError == null && longitudeError == null) {
+            val favorite = FavoriteLocation(
+                name = state.name.value,
+                latitude = state.latitude.value.toDouble(),
+                longitude = state.longitude.value.toDouble(),
+                description = state.description.value.trim(),
+            )
+            viewModelScope.launch {
+                preferencesRepository.addFavorite(favorite)
+            }
+            hideAddToFavoritesDialog()
+            _navigateToFavoritesEvent.trySend(Unit)
+        } else {
+            _uiState.update {
+                it.copy(
+                    addToFavoritesState = it.addToFavoritesState.copy(
+                        name = it.addToFavoritesState.name.copy(errorMessageRes = nameError),
+                        latitude = it.addToFavoritesState.latitude.copy(errorMessageRes = latitudeError),
+                        longitude = it.addToFavoritesState.longitude.copy(errorMessageRes = longitudeError)
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * Parses [input] as a `Double` and checks whether it falls within [range].
+     *
+     * @param input Raw text from a dialog field.
+     * @param range The valid coordinate range (e.g. `−90..90` for latitude).
+     * @param errorMessageRes String resource to return when the value is invalid.
+     * @return `null` when the input is valid, or [errorMessageRes] when it is not.
+     */
+    private fun validateInput(
+        input: String, range: ClosedRange<Double>, @StringRes errorMessageRes: Int
+    ): Int? {
+        val value = input.toDoubleOrNull()
+        return if (value == null || value !in range) errorMessageRes else null
     }
 }

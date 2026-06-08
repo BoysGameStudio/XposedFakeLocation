@@ -13,9 +13,18 @@
     <string name="action_add">Add</string>
     <string name="action_update">Update</string>
     <string name="action_go">Go</string>
+    <string name="action_reset">Reset</string>
 
     <string name="cd_back">Back</string>
     <string name="cd_navigate_back">Navigate back</string>
+    <string name="cd_change_language">Change language</string>
+    <string name="cd_search_settings">Search settings</string>
+    <string name="cd_search_apps">Search apps</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="cd_collapse_search">Collapse search</string>
+    <string name="cd_more_options">More options</string>
+    <string name="unit_meters" translatable="false">m</string>
+    <string name="unit_meters_per_second" translatable="false">m/s</string>
     <string name="cd_menu">Menu</string>
     <string name="cd_center">Center</string>
     <string name="cd_options">Options</string>
@@ -46,6 +55,7 @@
     <string name="dialog_module_not_active_message">XposedFakeLocation module is not active in your Xposed manager app. Please enable it and restart the app to continue.</string>
 
     <string name="category_language">Language</string>
+    <string name="category_appearance">Appearance</string>
     <string name="category_notifications">Notifications</string>
     <string name="category_external_control">External Control</string>
     <string name="category_system_hooks">System Hooks</string>
@@ -53,8 +63,14 @@
     <string name="category_altitude">Altitude</string>
     <string name="category_movement">Movement</string>
 
+    <string name="setting_theme_title">App theme</string>
+    <string name="setting_theme_description">Sets the colour scheme used throughout the manager app.</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+
     <string name="setting_language_title">App language</string>
-    <string name="setting_language_description">Choose the language used by the manager app and Xposed toast message.</string>
+    <string name="setting_language_description">Changes the language used by the manager app and its Xposed toast messages.</string>
     <string name="setting_hide_toast_title">Hide \'Fake location active\' toast</string>
     <string name="setting_hide_toast_description">Suppresses the toast shown when the module activates in a target app</string>
     <string name="setting_external_broadcast_title">Allow external broadcast control</string>
@@ -70,7 +86,12 @@
     <string name="setting_disable">Disable %1$s</string>
     <string name="setting_enable">Enable %1$s</string>
     <string name="setting_adjust_value">Adjust %1$s value</string>
-    <string name="setting_value_display">%1$s: %2$s %3$s</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_empty">No settings found</string>
+    <string name="settings_reset_all">Reset all settings</string>
+    <string name="settings_reset_title">Reset all settings?</string>
+    <string name="settings_reset_message">This restores every setting to its default value. This can\'t be undone.</string>
+    <string name="settings_reset_done">Settings reset to defaults</string>
 
     <string name="setting_randomize_title">Randomize Nearby Location</string>
     <string name="setting_randomize_description">Randomly places your location within the specified radius</string>
@@ -114,9 +135,10 @@
     <string name="toast_fake_location_set">Fake Location Set</string>
     <string name="toast_unset_fake_location">Unset Fake Location</string>
     <string name="toast_user_location_not_available">User location not available</string>
-    <string name="map_updating">Updating Map...</string>
+    <string name="map_updating">Updating Map…</string>
 
     <string name="field_name">Name</string>
+    <string name="field_description">Description (optional)</string>
     <string name="field_latitude">Latitude</string>
     <string name="field_longitude">Longitude</string>
     <string name="field_template">Template</string>
@@ -139,8 +161,18 @@
     <string name="profile_advanced_description">Override advanced settings for this app</string>
     <string name="template_advanced_description">Override the current global settings before saving this template</string>
 
-    <string name="favorites_empty">No favorites added.</string>
-    <string name="target_apps_search_label">Search apps or package names</string>
+    <string name="favorites_edit_title">Edit favorite</string>
+    <string name="favorites_empty">No favorites yet.</string>
+    <string name="favorites_empty_description">Save a location on the map to see it here.</string>
+    <string name="favorites_delete_title">Delete favorite?</string>
+    <string name="favorites_delete_message">Delete \"%1$s\"? This action cannot be undone.</string>
+    <string name="favorites_delete_confirm">Delete</string>
+    <string name="target_apps_search_label">Search apps or packages</string>
+    <string name="target_apps_no_results">No apps match \"%1$s\"</string>
+    <string name="target_apps_filter_user">User apps</string>
+    <string name="target_apps_filter_system">System apps</string>
+    <string name="target_apps_filter_no_results">No apps match the active filter</string>
+    <string name="cd_filter_apps">Filter apps</string>
     <string name="target_apps_selected_count">%1$d selected</string>
     <string name="target_apps_module_inactive">Module is not active. Enable XposedFakeLocation in your Xposed manager to choose target apps.</string>
     <string name="target_apps_scope_request_failed">Couldn\'t update scope: %1$s</string>
