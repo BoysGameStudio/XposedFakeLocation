@@ -10,7 +10,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,9 +21,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
 import kotlinx.coroutines.flow.Flow
-import org.osmdroid.events.MapListener
-import org.osmdroid.events.ScrollEvent
-import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -75,27 +71,7 @@ fun MapViewContainer(
         onLoadingFinished = onLoadingFinished,
         onInitialLocationResolved = onInitialLocationResolved,
     )
-    ManageMapViewLifecycle(mapView, locationOverlay)
-
-    // Add MapListener to update zoom level
-    DisposableEffect(mapView) {
-        val mapListener = object : MapListener {
-            override fun onScroll(event: ScrollEvent?): Boolean {
-                // Optional: update map center if needed
-                return false
-            }
-
-            override fun onZoom(event: ZoomEvent?): Boolean {
-                onMapZoomChange(mapView.zoomLevelDouble)
-                return true
-            }
-        }
-        mapView.addMapListener(mapListener)
-
-        onDispose {
-            mapView.removeMapListener(mapListener)
-        }
-    }
+    ManageMapViewLifecycle(mapView, locationOverlay, onMapZoomChange)
 
     // Display loading spinner or MapView
     if (isLoading) {

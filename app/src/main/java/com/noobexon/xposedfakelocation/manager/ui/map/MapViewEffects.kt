@@ -9,8 +9,10 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
@@ -116,11 +118,14 @@ internal fun SetupMapClickListener(
     isPlaying: Boolean,
     onClickedLocationChange: (GeoPoint?) -> Unit
 ) {
-    DisposableEffect(mapView, isPlaying) {
+    // Keep the latest values without re-creating the overlay each time spoofing toggles.
+    val currentIsPlaying by rememberUpdatedState(isPlaying)
+    val currentOnClickedLocationChange by rememberUpdatedState(onClickedLocationChange)
+    DisposableEffect(mapView) {
         val mapEventsReceiver = object : MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                if (!isPlaying) {
-                    onClickedLocationChange(p)
+                if (!currentIsPlaying) {
+                    currentOnClickedLocationChange(p)
                 }
                 return true
             }
@@ -303,12 +308,15 @@ private fun centerOnDefaultLocation(
 @Composable
 internal fun ManageMapViewLifecycle(
     mapView: MapView,
-    locationOverlay: MyLocationNewOverlay
+    locationOverlay: MyLocationNewOverlay,
+    onMapZoomChange: (Double) -> Unit
 ) {
     DisposableEffect(Unit) {
         mapView.onResume()
         locationOverlay.enableMyLocation()
         onDispose {
+            // Capture the final zoom so it can be restored when the map screen is returned to.
+            onMapZoomChange(mapView.zoomLevelDouble)
             locationOverlay.disableMyLocation()
             mapView.overlays.clear()
             mapView.onPause()
