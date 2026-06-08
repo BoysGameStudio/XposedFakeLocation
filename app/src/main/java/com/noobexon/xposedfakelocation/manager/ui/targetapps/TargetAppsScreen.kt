@@ -83,6 +83,16 @@ import com.noobexon.xposedfakelocation.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * Entry-point composable for the target-apps screen.
+ *
+ * Collects [TargetAppsViewModel.uiState] and [TargetAppsViewModel.events] with lifecycle
+ * awareness, translates one-shot events into snackbar messages, and delegates all layout to the
+ * stateless [TargetAppsContent].
+ *
+ * @param navController Used to navigate back when the user presses the back arrow.
+ * @param viewModel Injected automatically by [viewModel]; can be overridden in tests.
+ */
 @Composable
 fun TargetAppsScreen(
     navController: NavController,
@@ -126,6 +136,24 @@ fun TargetAppsScreen(
     )
 }
 
+/**
+ * Stateless layout composable for the target-apps screen.
+ *
+ * Renders a [TopAppBar] with an inline search field, a filter dropdown, a summary line showing the
+ * selected-app count, and a [LazyColumn] of [TargetAppRow]s. Supports swipe-to-refresh via
+ * [PullToRefreshContainer] and shows appropriate empty-state messages when no apps match the
+ * active search query or filter settings.
+ *
+ * @param uiState Current screen state produced by [TargetAppsViewModel].
+ * @param snackbarHostState Controls snackbar messages driven by [TargetAppsScreen].
+ * @param onNavigateUp Called when the user presses the back arrow while search is inactive.
+ * @param onSearchQueryChange Called on every keystroke in the inline search field.
+ * @param onToggle Called when the user taps a row or its checkbox to toggle scope membership.
+ * @param onRelaunch Called when the user taps the relaunch icon on a selected app.
+ * @param onRefresh Called when the user completes a pull-to-refresh gesture.
+ * @param onSetShowUserApps Called when the user toggles the "User apps" filter checkbox.
+ * @param onSetShowSystemApps Called when the user toggles the "System apps" filter checkbox.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TargetAppsContent(
@@ -380,6 +408,17 @@ private fun TargetAppsContent(
     }
 }
 
+/**
+ * A single row in the target-apps list.
+ *
+ * Displays the app icon, name, and package name. When [TargetAppItem.isSelected] is `true`, also
+ * shows a relaunch button (or a spinner while [TargetAppItem.isRelaunching] is `true`). The
+ * checkbox is replaced by a spinner while [TargetAppItem.isPending] is `true`.
+ *
+ * @param app Data for the app to render.
+ * @param onToggle Called when the user taps the row or its checkbox.
+ * @param onRelaunch Called when the user taps the relaunch icon.
+ */
 @Composable
 private fun TargetAppRow(
     app: TargetAppItem,
@@ -452,6 +491,15 @@ private fun TargetAppRow(
     }
 }
 
+/**
+ * Loads and displays the launcher icon for [packageName] asynchronously on [Dispatchers.IO].
+ *
+ * While the bitmap is loading, renders a circular placeholder containing the first letter of
+ * [label]. Falls back to the placeholder permanently if the icon cannot be loaded.
+ *
+ * @param packageName Package whose icon is fetched via [android.content.pm.PackageManager.getApplicationIcon].
+ * @param label App display name; used as the fallback initial and as the image content description.
+ */
 @Composable
 private fun AppIcon(
     packageName: String,
