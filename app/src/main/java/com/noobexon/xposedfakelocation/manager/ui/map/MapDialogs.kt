@@ -21,6 +21,84 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noobexon.xposedfakelocation.R
 
 @Composable
+fun GoToPointDialog(
+    mapViewModel: MapViewModel,
+    onDismissRequest: () -> Unit,
+    onGoToPoint: (latitude: Double, longitude: Double) -> Unit
+) {
+    val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
+    val goToPointState = uiState.goToPointState
+    val latitudeInput = goToPointState.first.value
+    val longitudeInput = goToPointState.second.value
+    val latitudeError = goToPointState.first.errorMessageRes
+    val longitudeError = goToPointState.second.errorMessageRes
+
+    AlertDialog(
+        onDismissRequest = {
+            mapViewModel.clearGoToPointInputs()
+            onDismissRequest()
+        },
+        title = { Text(stringResource(R.string.map_go_to_point)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = latitudeInput,
+                    onValueChange = { mapViewModel.updateGoToPointField("latitude", it) },
+                    label = { Text(stringResource(R.string.field_latitude)) },
+                    isError = latitudeError != null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (latitudeError != null) {
+                    Text(
+                        text = stringResource(latitudeError),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = longitudeInput,
+                    onValueChange = { mapViewModel.updateGoToPointField("longitude", it) },
+                    label = { Text(stringResource(R.string.field_longitude)) },
+                    isError = longitudeError != null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (longitudeError != null) {
+                    Text(
+                        text = stringResource(longitudeError),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 16.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    mapViewModel.validateAndGo { latitude, longitude ->
+                        onGoToPoint(latitude, longitude)
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.action_go))
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    mapViewModel.clearGoToPointInputs()
+                    onDismissRequest()
+                }
+            ) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
 fun AddToFavoritesDialog(
     mapViewModel: MapViewModel,
     onDismissRequest: () -> Unit,
