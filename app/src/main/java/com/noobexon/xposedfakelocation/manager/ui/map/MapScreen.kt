@@ -32,6 +32,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,10 +70,18 @@ fun MapScreen(
         scope.launch { drawerState.close() }
     }
 
+    // When returning to the map after navigating away via the drawer, restore the drawer open.
+    LaunchedEffect(Unit) {
+        if (mapViewModel.consumeReopenDrawerRequest()) {
+            drawerState.open()
+        }
+    }
+
     ModalNavigationDrawer(
         drawerContent = {
             DrawerContent(
                 onCloseDrawer = { scope.launch { drawerState.close() } },
+                onNavigate = { mapViewModel.requestReopenDrawer() },
                 navController = navController
             )
         },

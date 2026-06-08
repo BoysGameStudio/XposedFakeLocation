@@ -21,6 +21,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.noobexon.xposedfakelocation.BuildConfig
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
@@ -58,9 +60,19 @@ private object DrawerDimensions {
 @Composable
 fun DrawerContent(
     navController: NavController,
-    onCloseDrawer: () -> Unit = {}
+    onCloseDrawer: () -> Unit = {},
+    onNavigate: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val navigateTo: (String) -> Unit = { route ->
+        if (route != currentRoute) {
+            onNavigate()
+            navController.navigate(route) { launchSingleTop = true }
+        }
+        onCloseDrawer()
+    }
 
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -78,41 +90,29 @@ fun DrawerContent(
             DrawerItem(
                 icon = LineAwesomeIcons.MapSolid,
                 label = stringResource(R.string.drawer_map),
-                onClick = {
-                    navController.navigate(Screen.Map.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.Map.route
+                onClick = { navigateTo(Screen.Map.route) },
+                isSelected = currentRoute == Screen.Map.route
             )
 
             DrawerItem(
                 icon = LineAwesomeIcons.HeartSolid,
                 label = stringResource(R.string.screen_favorites),
-                onClick = {
-                    navController.navigate(Screen.Favorites.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.Favorites.route
+                onClick = { navigateTo(Screen.Favorites.route) },
+                isSelected = currentRoute == Screen.Favorites.route
             )
 
             DrawerItem(
                 icon = LineAwesomeIcons.MobileAltSolid,
                 label = stringResource(R.string.screen_target_apps),
-                onClick = {
-                    navController.navigate(Screen.TargetApps.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.TargetApps.route
+                onClick = { navigateTo(Screen.TargetApps.route) },
+                isSelected = currentRoute == Screen.TargetApps.route
             )
 
             DrawerItem(
                 icon = Icons.Default.Settings,
                 label = stringResource(R.string.screen_settings),
-                onClick = {
-                    navController.navigate(Screen.Settings.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.Settings.route
+                onClick = { navigateTo(Screen.Settings.route) },
+                isSelected = currentRoute == Screen.Settings.route
             )
 
             Spacer(modifier = Modifier.height(DrawerDimensions.SECTION_SPACING))
@@ -154,11 +154,8 @@ fun DrawerContent(
             DrawerItem(
                 icon = LineAwesomeIcons.InfoCircleSolid,
                 label = stringResource(R.string.screen_about),
-                onClick = {
-                    navController.navigate(Screen.About.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.About.route
+                onClick = { navigateTo(Screen.About.route) },
+                isSelected = currentRoute == Screen.About.route
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -176,7 +173,7 @@ fun DrawerContent(
 }
 
 @Composable
-fun DrawerHeader() {
+private fun DrawerHeader() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,7 +195,7 @@ fun DrawerHeader() {
 }
 
 @Composable
-fun DrawerSectionHeader(title: String) {
+private fun DrawerSectionHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,
@@ -212,7 +209,7 @@ fun DrawerSectionHeader(title: String) {
 }
 
 @Composable
-fun DrawerItem(
+private fun DrawerItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

@@ -90,6 +90,22 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(hasResolvedInitialLocation = true) }
     }
 
+    // One-shot request to reopen the navigation drawer once the map screen is returned to, set when
+    // the user navigates to another screen via the drawer. Survives the map screen being destroyed.
+    private var reopenDrawerRequested = false
+
+    /** Records that the drawer should be reopened the next time the map screen is shown. */
+    fun requestReopenDrawer() {
+        reopenDrawerRequested = true
+    }
+
+    /** Returns whether a drawer-reopen was requested, consuming the one-shot flag. */
+    fun consumeReopenDrawerRequest(): Boolean {
+        val requested = reopenDrawerRequested
+        reopenDrawerRequested = false
+        return requested
+    }
+
     fun triggerCenterMapEvent() {
         _centerMapEvent.trySend(Unit)
     }
