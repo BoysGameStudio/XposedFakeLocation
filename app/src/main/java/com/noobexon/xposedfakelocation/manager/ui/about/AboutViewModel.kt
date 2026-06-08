@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
+import com.noobexon.xposedfakelocation.manager.ui.about.AboutViewModel.Companion.CACHE_TTL_MILLIS
+import com.noobexon.xposedfakelocation.manager.ui.about.AboutViewModel.Companion.DEVELOPER
+import com.noobexon.xposedfakelocation.manager.ui.about.AboutViewModel.Companion.cache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
