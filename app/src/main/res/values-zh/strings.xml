@@ -159,6 +159,7 @@
     <string name="profile_advanced_description">覆盖此应用的高级设置</string>
     <string name="template_advanced_description">保存此模板前覆盖当前全局设置</string>
 
+    <string name="favorites_edit_title">编辑收藏</string>
     <string name="favorites_empty">还没有收藏。</string>
     <string name="favorites_empty_description">在地图上保存一个位置，它将显示在这里。</string>
     <string name="favorites_delete_title">删除收藏？</string>

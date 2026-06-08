@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
@@ -26,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -66,6 +70,7 @@ fun FavoritesScreen(
             navController.navigateUp()
         },
         onDelete = { favorite -> favoritesViewModel.removeFavorite(favorite) },
+        onEdit = { old, new -> favoritesViewModel.updateFavorite(old, new) },
         onNavigateUp = { navController.navigateUp() },
     )
 }
@@ -76,9 +81,11 @@ private fun FavoritesContent(
     favorites: List<FavoriteLocation>,
     onFavoriteClick: (FavoriteLocation) -> Unit,
     onDelete: (FavoriteLocation) -> Unit,
+    onEdit: (old: FavoriteLocation, new: FavoriteLocation) -> Unit,
     onNavigateUp: () -> Unit,
 ) {
     var deletePending by remember { mutableStateOf<FavoriteLocation?>(null) }
+    var editPending by remember { mutableStateOf<FavoriteLocation?>(null) }
 
     deletePending?.let { favorite ->
         DeleteConfirmationDialog(
@@ -88,6 +95,17 @@ private fun FavoritesContent(
                 deletePending = null
             },
             onDismiss = { deletePending = null },
+        )
+    }
+
+    editPending?.let { favorite ->
+        EditFavoriteDialog(
+            favorite = favorite,
+            onSave = { updated ->
+                onEdit(favorite, updated)
+                editPending = null
+            },
+            onDismiss = { editPending = null },
         )
     }
 
@@ -116,6 +134,7 @@ private fun FavoritesContent(
                     FavoriteItem(
                         favorite = favorite,
                         onClick = { onFavoriteClick(favorite) },
+                        onEditClick = { editPending = favorite },
                         onDeleteClick = { deletePending = favorite },
                     )
                 }
@@ -181,6 +200,7 @@ private fun FavoritesEmptyState(modifier: Modifier = Modifier) {
 private fun FavoriteItem(
     favorite: FavoriteLocation,
     onClick: () -> Unit,
+    onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
 ) {
     ElevatedCard(
@@ -236,6 +256,13 @@ private fun FavoriteItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            IconButton(onClick = onEditClick) {
+                Icon(
+                    imageVector = Icons.Outlined.Edit,
+                    contentDescription = stringResource(R.string.cd_edit_named_item, favorite.name),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
             IconButton(onClick = onDeleteClick) {
                 Icon(
                     imageVector = Icons.Outlined.Delete,
@@ -245,6 +272,112 @@ private fun FavoriteItem(
             }
         }
     }
+}
+
+@Composable
+private fun EditFavoriteDialog(
+    favorite: FavoriteLocation,
+    onSave: (FavoriteLocation) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val latRange = -90.0..90.0
+    val lonRange = -180.0..180.0
+
+    var name by remember { mutableStateOf(favorite.name) }
+    var description by remember { mutableStateOf(favorite.description) }
+    var latitude by remember { mutableStateOf(favorite.latitude.toString()) }
+    var longitude by remember { mutableStateOf(favorite.longitude.toString()) }
+
+    var nameError by remember { mutableStateOf(false) }
+    var latitudeError by remember { mutableStateOf(false) }
+    var longitudeError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.favorites_edit_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        nameError = it.isBlank()
+                    },
+                    label = { Text(stringResource(R.string.field_name)) },
+                    isError = nameError,
+                    supportingText = if (nameError) {
+                        { Text(stringResource(R.string.validation_name_required)) }
+                    } else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text(stringResource(R.string.field_description)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = latitude,
+                    onValueChange = {
+                        latitude = it
+                        latitudeError = it.toDoubleOrNull()?.let { v -> v !in latRange } != false
+                    },
+                    label = { Text(stringResource(R.string.field_latitude)) },
+                    isError = latitudeError,
+                    supportingText = if (latitudeError) {
+                        { Text(stringResource(R.string.validation_latitude_range)) }
+                    } else null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = longitude,
+                    onValueChange = {
+                        longitude = it
+                        longitudeError = it.toDoubleOrNull()?.let { v -> v !in lonRange } != false
+                    },
+                    label = { Text(stringResource(R.string.field_longitude)) },
+                    isError = longitudeError,
+                    supportingText = if (longitudeError) {
+                        { Text(stringResource(R.string.validation_longitude_range)) }
+                    } else null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val latVal = latitude.toDoubleOrNull()
+                    val lonVal = longitude.toDoubleOrNull()
+                    nameError = name.isBlank()
+                    latitudeError = latVal == null || latVal !in latRange
+                    longitudeError = lonVal == null || lonVal !in lonRange
+                    if (!nameError && !latitudeError && !longitudeError) {
+                        onSave(
+                            favorite.copy(
+                                name = name.trim(),
+                                description = description.trim(),
+                                latitude = latVal!!,
+                                longitude = lonVal!!,
+                            )
+                        )
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
 }
 
 @Composable

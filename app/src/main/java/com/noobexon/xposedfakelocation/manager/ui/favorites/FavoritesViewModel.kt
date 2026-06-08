@@ -23,4 +23,10 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             preferencesRepository.removeFavorite(favorite)
         }
     }
+
+    fun updateFavorite(old: FavoriteLocation, new: FavoriteLocation) {
+        viewModelScope.launch {
+            preferencesRepository.updateFavorite(old, new)
+        }
+    }
 }

@@ -161,6 +161,7 @@
     <string name="profile_advanced_description">Override advanced settings for this app</string>
     <string name="template_advanced_description">Override the current global settings before saving this template</string>
 
+    <string name="favorites_edit_title">Edit favorite</string>
     <string name="favorites_empty">No favorites yet.</string>
     <string name="favorites_empty_description">Save a location on the map to see it here.</string>
     <string name="favorites_delete_title">Delete favorite?</string>

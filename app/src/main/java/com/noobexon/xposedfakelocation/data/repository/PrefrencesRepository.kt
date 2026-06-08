@@ -314,6 +314,15 @@ class PreferencesRepository(context: Context) {
         Log.d(tag, "Removed Favorite: $favorite")
     }
 
+    suspend fun updateFavorite(old: FavoriteLocation, new: FavoriteLocation) {
+        val updated = getFavorites().toMutableList().apply {
+            val index = indexOf(old)
+            if (index != -1) set(index, new)
+        }
+        saveFavorites(updated)
+        Log.d(tag, "Updated Favorite: $old -> $new")
+    }
+
     fun getFavorites(): List<FavoriteLocation> = parseFavorites(localPrefs.getString(KEY_FAVORITES, null))
 
     private fun saveFavorites(favorites: List<FavoriteLocation>) {
