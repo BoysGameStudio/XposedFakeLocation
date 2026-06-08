@@ -3,6 +3,7 @@ package com.noobexon.xposedfakelocation.manager.ui.targetapps
 import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.noobexon.xposedfakelocation.data.MANAGER_APP_PACKAGE_NAME
@@ -29,6 +30,7 @@ data class TargetAppItem(
     val isRelaunching: Boolean = false
 )
 
+@Immutable
 data class TargetAppsUiState(
     val apps: List<TargetAppItem> = emptyList(),
     val selectedPackages: Set<String> = emptySet(),
