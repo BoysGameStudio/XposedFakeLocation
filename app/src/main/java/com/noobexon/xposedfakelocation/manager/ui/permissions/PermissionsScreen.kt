@@ -36,6 +36,23 @@ import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 
+/**
+ * Entry-point composable for the permissions gate.
+ *
+ * On every [Lifecycle.Event.ON_RESUME] (including the initial one, which Android replays
+ * synchronously when the observer is registered) it re-checks whether
+ * [Manifest.permission.ACCESS_FINE_LOCATION] is granted and reacts accordingly:
+ *
+ * - **Not yet checked** — shows a full-screen [CircularProgressIndicator].
+ * - **Checked, granted** — navigates to [Screen.Map], clearing this screen from the back stack.
+ * - **Checked, denied once** — shows [PermissionRequestScreen] with a rationale and a grant button.
+ * - **Permanently denied** — shows [PermanentlyDeniedScreen] with a button to open app Settings.
+ *   When the user grants the permission there and returns, [Lifecycle.Event.ON_RESUME] fires
+ *   again, the check passes, and navigation happens automatically.
+ *
+ * @param navController Used to navigate forward to [Screen.Map] once permission is granted.
+ * @param permissionsViewModel Injected automatically by [viewModel]; can be overridden in tests.
+ */
 @Composable
 fun PermissionsScreen(
     navController: NavController,
@@ -107,6 +124,15 @@ fun PermissionsScreen(
     }
 }
 
+/**
+ * Shown when the user has permanently denied [Manifest.permission.ACCESS_FINE_LOCATION].
+ *
+ * Displays an explanation and a button that deep-links to the app's system Settings page so the
+ * user can grant the permission manually. [PermissionsScreen] re-checks on the next
+ * [Lifecycle.Event.ON_RESUME] and navigates forward automatically if the permission is granted.
+ *
+ * @param context Used to open the Settings intent and resolve the app's package name.
+ */
 @Composable
 private fun PermanentlyDeniedScreen(context: Context) {
     Text(
@@ -125,6 +151,14 @@ private fun PermanentlyDeniedScreen(context: Context) {
     }
 }
 
+/**
+ * Shown when [Manifest.permission.ACCESS_FINE_LOCATION] has been denied but not permanently.
+ *
+ * Displays a rationale and a button that triggers the system permission dialog.
+ *
+ * @param onGrantPermission Called when the user taps the grant button; should launch the
+ *   [ActivityResultContracts.RequestPermission] launcher for [Manifest.permission.ACCESS_FINE_LOCATION].
+ */
 @Composable
 private fun PermissionRequestScreen(onGrantPermission: () -> Unit) {
     Text(
