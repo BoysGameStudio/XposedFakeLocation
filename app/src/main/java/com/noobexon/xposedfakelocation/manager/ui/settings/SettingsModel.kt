@@ -82,13 +82,13 @@ enum class NumericSetting(
         R.string.setting_horizontal_accuracy_title,
         R.string.setting_horizontal_accuracy_description,
         R.string.setting_horizontal_accuracy_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 1f, default = DEFAULT_ACCURACY.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 0.01f, default = DEFAULT_ACCURACY.toFloat()
     ),
     VERTICAL_ACCURACY(
         R.string.setting_vertical_accuracy_title,
         R.string.setting_vertical_accuracy_description,
         R.string.setting_vertical_accuracy_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 1f, default = DEFAULT_VERTICAL_ACCURACY
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 0.01f, default = DEFAULT_VERTICAL_ACCURACY
     ),
     ALTITUDE(
         R.string.setting_altitude_title,
@@ -106,7 +106,7 @@ enum class NumericSetting(
         R.string.setting_msl_accuracy_title,
         R.string.setting_msl_accuracy_description,
         R.string.setting_msl_accuracy_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 1f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 0.01f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
     ),
     SPEED(
         R.string.setting_speed_title,
@@ -118,16 +118,19 @@ enum class NumericSetting(
         R.string.setting_speed_accuracy_title,
         R.string.setting_speed_accuracy_description,
         R.string.setting_speed_accuracy_label,
-        unitRes = R.string.unit_meters_per_second, min = 0f, max = 100f, precision = 1f, default = DEFAULT_SPEED_ACCURACY
+        unitRes = R.string.unit_meters_per_second, min = 0f, max = 100f, precision = 0.01f, default = DEFAULT_SPEED_ACCURACY
     );
 
     /**
      * Number of fractional digits used when formatting or rounding a value for this setting.
-     * Derived from [precision]: integer-granularity settings (`precision >= 1f`) use `0`; sub-unit
-     * settings use `1`. Consistent between the field label and [roundValue] so the displayed and
-     * persisted values always agree.
+     * Derived from [precision]: `>= 1f` → 0, `>= 0.1f` → 1, `< 0.1f` → 2. Consistent between
+     * the field label and [roundValue] so the displayed and persisted values always agree.
      */
-    val decimals: Int get() = if (precision >= 1f) 0 else 1
+    val decimals: Int get() = when {
+        precision >= 1f -> 0
+        precision >= 0.1f -> 1
+        else -> 2
+    }
 
     /**
      * Rounds [value] to [decimals] fractional digits, eliminating the floating-point drift that
@@ -136,8 +139,11 @@ enum class NumericSetting(
      * @param value raw value to round (e.g. from a slider drag or typed input).
      * @return value rounded to the precision implied by [precision].
      */
-    fun roundValue(value: Float): Float =
-        if (decimals == 0) round(value) else round(value * 10f) / 10f
+    fun roundValue(value: Float): Float = when (decimals) {
+        0 -> round(value)
+        1 -> round(value * 10f) / 10f
+        else -> round(value * 100f) / 100f
+    }
 }
 
 /**
