@@ -33,7 +33,7 @@ android {
 
     defaultConfig {
         applicationId = "com.noobexon.xposedfakelocation"
-        minSdk = 30
+        minSdk = 29
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
