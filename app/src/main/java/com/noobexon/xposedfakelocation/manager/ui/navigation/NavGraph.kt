@@ -12,6 +12,7 @@ import com.noobexon.xposedfakelocation.manager.ui.map.MapViewModel
 import com.noobexon.xposedfakelocation.manager.ui.permissions.PermissionsScreen
 import com.noobexon.xposedfakelocation.manager.ui.settings.SettingsScreen
 import com.noobexon.xposedfakelocation.manager.ui.targetapps.TargetAppsScreen
+import org.osmdroid.util.GeoPoint
 
 @Composable
 fun AppNavGraph(
@@ -27,7 +28,12 @@ fun AppNavGraph(
             AboutScreen(navController = navController)
         }
         composable(route = Screen.Favorites.route) {
-            FavoritesScreen(navController = navController, mapViewModel)
+            FavoritesScreen(
+                navController = navController,
+                onFavoriteSelected = { favorite ->
+                    mapViewModel.updateClickedLocation(GeoPoint(favorite.latitude, favorite.longitude))
+                },
+            )
         }
         composable(route = Screen.Map.route) {
             MapScreen(navController = navController, mapViewModel)

@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -21,45 +21,46 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
-import com.noobexon.xposedfakelocation.manager.ui.map.MapViewModel
-import org.osmdroid.util.GeoPoint
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     navController: NavController,
-    mapViewModel: MapViewModel,
+    onFavoriteSelected: (FavoriteLocation) -> Unit,
     favoritesViewModel: FavoritesViewModel = viewModel()
 ) {
-    val favorites by favoritesViewModel.favorites.collectAsState()
+    val favorites by favoritesViewModel.favorites.collectAsStateWithLifecycle()
 
+    FavoritesContent(
+        favorites = favorites,
+        onFavoriteClick = { favorite ->
+            onFavoriteSelected(favorite)
+            navController.navigateUp()
+        },
+        onDelete = { favorite -> favoritesViewModel.removeFavorite(favorite) },
+        onNavigateUp = { navController.navigateUp() },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FavoritesContent(
+    favorites: List<FavoriteLocation>,
+    onFavoriteClick: (FavoriteLocation) -> Unit,
+    onDelete: (FavoriteLocation) -> Unit,
+    onNavigateUp: () -> Unit,
+) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.screen_favorites)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
-                    }
-                }
-            )
-        }
+        topBar = { FavoritesTopAppBar(onNavigateUp) }
     ) { innerPadding ->
         if (favorites.isEmpty()) {
             Box(
@@ -79,11 +80,8 @@ fun FavoritesScreen(
                 items(favorites) { favorite ->
                     FavoriteItem(
                         favorite = favorite,
-                        onClick = {
-                            mapViewModel.updateClickedLocation(GeoPoint(favorite.latitude, favorite.longitude))
-                            navController.navigateUp()
-                        },
-                        onDelete = { favoritesViewModel.removeFavorite(favorite) }
+                        onClick = { onFavoriteClick(favorite) },
+                        onDelete = { onDelete(favorite) },
                     )
                 }
             }
@@ -91,11 +89,33 @@ fun FavoritesScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FavoriteItem(
+private fun FavoritesTopAppBar(onNavigateUp: () -> Unit) {
+    TopAppBar(
+        title = { Text(stringResource(R.string.screen_favorites)) },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        navigationIcon = {
+            IconButton(onClick = onNavigateUp) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.cd_back)
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun FavoriteItem(
     favorite: FavoriteLocation,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
@@ -117,7 +137,10 @@ fun FavoriteItem(
             },
             trailingContent = {
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete))
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.cd_delete)
+                    )
                 }
             }
         )
