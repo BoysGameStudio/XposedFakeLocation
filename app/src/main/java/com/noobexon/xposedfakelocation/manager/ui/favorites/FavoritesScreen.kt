@@ -50,6 +50,8 @@ import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 
+//TODO: continue this screen after we finish with the map and drawer
+
 @Composable
 fun FavoritesScreen(
     navController: NavController,
