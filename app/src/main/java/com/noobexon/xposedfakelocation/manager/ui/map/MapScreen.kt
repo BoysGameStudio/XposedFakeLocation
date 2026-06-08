@@ -212,21 +212,50 @@ fun MapScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                MapViewContainer(mapViewModel)
+                MapViewContainer(
+                    isLoading = uiState.isLoading,
+                    lastClickedLocation = uiState.lastClickedLocation,
+                    isPlaying = uiState.isPlaying,
+                    mapZoom = uiState.mapZoom,
+                    goToPointEvent = mapViewModel.goToPointEvent,
+                    centerMapEvent = mapViewModel.centerMapEvent,
+                    onClickedLocationChange = mapViewModel::updateClickedLocation,
+                    onUserLocationChange = mapViewModel::updateUserLocation,
+                    onMapZoomChange = mapViewModel::updateMapZoom,
+                    onLoadingStarted = mapViewModel::setLoadingStarted,
+                    onLoadingFinished = mapViewModel::setLoadingFinished,
+                )
             }
         }
 
         if (showGoToPointDialog) {
+            val goToPoint = uiState.goToPointState
             GoToPointDialog(
-                mapViewModel = mapViewModel,
-                onDismissRequest = { mapViewModel.hideGoToPointDialog() }
+                latitude = goToPoint.latitude.value,
+                longitude = goToPoint.longitude.value,
+                latitudeErrorRes = goToPoint.latitude.errorMessageRes,
+                longitudeErrorRes = goToPoint.longitude.errorMessageRes,
+                onLatitudeChange = mapViewModel::onGoToPointLatitudeChange,
+                onLongitudeChange = mapViewModel::onGoToPointLongitudeChange,
+                onConfirm = mapViewModel::confirmGoToPoint,
+                onDismissRequest = mapViewModel::hideGoToPointDialog,
             )
         }
 
         if (showAddToFavoritesDialog) {
+            val favorite = uiState.addToFavoritesState
             AddToFavoritesDialog(
-                mapViewModel = mapViewModel,
-                onDismissRequest = { mapViewModel.hideAddToFavoritesDialog() }
+                name = favorite.name.value,
+                latitude = favorite.latitude.value,
+                longitude = favorite.longitude.value,
+                nameErrorRes = favorite.name.errorMessageRes,
+                latitudeErrorRes = favorite.latitude.errorMessageRes,
+                longitudeErrorRes = favorite.longitude.errorMessageRes,
+                onNameChange = mapViewModel::onFavoriteNameChange,
+                onLatitudeChange = mapViewModel::onFavoriteLatitudeChange,
+                onLongitudeChange = mapViewModel::onFavoriteLongitudeChange,
+                onConfirm = mapViewModel::confirmAddFavorite,
+                onDismissRequest = mapViewModel::hideAddToFavoritesDialog,
             )
         }
     }

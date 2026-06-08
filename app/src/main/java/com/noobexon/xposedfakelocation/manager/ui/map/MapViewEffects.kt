@@ -18,6 +18,7 @@ import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_DELAY_MS
 import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_MAX_ATTEMPTS
 import com.noobexon.xposedfakelocation.data.WORLD_MAP_ZOOM
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -41,12 +42,12 @@ internal fun AddLocationOverlayToMap(
 internal fun HandleCenterMapEvent(
     mapView: MapView,
     locationOverlay: MyLocationNewOverlay,
-    mapViewModel: MapViewModel
+    centerMapEvent: Flow<Unit>
 ) {
     val context = LocalContext.current
     val userLocationNotAvailable = stringResource(R.string.toast_user_location_not_available)
     LaunchedEffect(Unit) {
-        mapViewModel.centerMapEvent.collect {
+        centerMapEvent.collect {
             val userLocation = locationOverlay.myLocation
             if (userLocation != null) {
                 mapView.controller.animateTo(userLocation)
@@ -60,12 +61,13 @@ internal fun HandleCenterMapEvent(
 @Composable
 internal fun HandleGoToPointEvent(
     mapView: MapView,
-    mapViewModel: MapViewModel
+    goToPointEvent: Flow<GeoPoint>,
+    onClickedLocationChange: (GeoPoint?) -> Unit
 ) {
     LaunchedEffect(Unit) {
-        mapViewModel.goToPointEvent.collect { geoPoint ->
+        goToPointEvent.collect { geoPoint ->
             mapView.controller.animateTo(geoPoint)
-            mapViewModel.updateClickedLocation(geoPoint)
+            onClickedLocationChange(geoPoint)
         }
     }
 }
@@ -98,14 +100,14 @@ internal fun HandleMarkerUpdates(
 @Composable
 internal fun SetupMapClickListener(
     mapView: MapView,
-    mapViewModel: MapViewModel,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    onClickedLocationChange: (GeoPoint?) -> Unit
 ) {
     DisposableEffect(mapView, isPlaying) {
         val mapEventsReceiver = object : MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
                 if (!isPlaying) {
-                    mapViewModel.updateClickedLocation(p)
+                    onClickedLocationChange(p)
                 }
                 return true
             }
@@ -128,20 +130,22 @@ internal fun SetupMapClickListener(
 internal fun CenterMapOnUserLocation(
     mapView: MapView,
     locationOverlay: MyLocationNewOverlay,
-    mapViewModel: MapViewModel,
     lastClickedLocation: GeoPoint?,
-    mapZoom: Double?
+    mapZoom: Double?,
+    onUserLocationChange: (GeoPoint) -> Unit,
+    onMapZoomChange: (Double) -> Unit,
+    onLoadingFinished: () -> Unit
 ) {
     val context = LocalContext.current
     LaunchedEffect(mapView, lastClickedLocation) {
         if (lastClickedLocation != null) {
-            centerOnMarkerLocation(mapView, lastClickedLocation, mapZoom, mapViewModel)
+            centerOnMarkerLocation(mapView, lastClickedLocation, mapZoom, onMapZoomChange, onLoadingFinished)
         } else {
             val lastKnown = getLastKnownDeviceLocation(context)
             if (lastKnown != null) {
-                centerOnGeoPoint(mapView, lastKnown, mapViewModel)
-            } else if (!tryToFindAndCenterUserLocation(mapView, locationOverlay, mapViewModel)) {
-                centerOnDefaultLocation(mapView, mapViewModel)
+                centerOnGeoPoint(mapView, lastKnown, onUserLocationChange, onMapZoomChange, onLoadingFinished)
+            } else if (!tryToFindAndCenterUserLocation(mapView, locationOverlay, onUserLocationChange, onMapZoomChange, onLoadingFinished)) {
+                centerOnDefaultLocation(mapView, onMapZoomChange, onLoadingFinished)
             }
         }
     }
@@ -154,25 +158,28 @@ private suspend fun centerOnMarkerLocation(
     mapView: MapView,
     markerLocation: GeoPoint,
     mapZoom: Double?,
-    mapViewModel: MapViewModel
+    onMapZoomChange: (Double) -> Unit,
+    onLoadingFinished: () -> Unit
 ) {
     val zoom = mapZoom ?: DEFAULT_MAP_ZOOM
     mapView.controller.setZoom(zoom)
     mapView.controller.animateTo(markerLocation)
-    mapViewModel.updateMapZoom(zoom)
-    mapViewModel.setLoadingFinished()
+    onMapZoomChange(zoom)
+    onLoadingFinished()
 }
 
 private fun centerOnGeoPoint(
     mapView: MapView,
     point: GeoPoint,
-    mapViewModel: MapViewModel
+    onUserLocationChange: (GeoPoint) -> Unit,
+    onMapZoomChange: (Double) -> Unit,
+    onLoadingFinished: () -> Unit
 ) {
     mapView.controller.setZoom(DEFAULT_MAP_ZOOM)
     mapView.controller.setCenter(point)
-    mapViewModel.updateUserLocation(point)
-    mapViewModel.updateMapZoom(DEFAULT_MAP_ZOOM)
-    mapViewModel.setLoadingFinished()
+    onUserLocationChange(point)
+    onMapZoomChange(DEFAULT_MAP_ZOOM)
+    onLoadingFinished()
 }
 
 private fun getLastKnownDeviceLocation(context: Context): GeoPoint? {
@@ -209,17 +216,19 @@ private fun getLastKnownDeviceLocation(context: Context): GeoPoint? {
 private suspend fun tryToFindAndCenterUserLocation(
     mapView: MapView,
     locationOverlay: MyLocationNewOverlay,
-    mapViewModel: MapViewModel
+    onUserLocationChange: (GeoPoint) -> Unit,
+    onMapZoomChange: (Double) -> Unit,
+    onLoadingFinished: () -> Unit
 ): Boolean {
     // Attempt to find user location within a timeout period
     repeat(LOCATION_DETECTION_MAX_ATTEMPTS) {
         val userLocation = locationOverlay.myLocation
         if (userLocation != null) {
-            mapViewModel.updateUserLocation(userLocation)
+            onUserLocationChange(userLocation)
             mapView.controller.setZoom(DEFAULT_MAP_ZOOM)
             mapView.controller.animateTo(userLocation)
-            mapViewModel.updateMapZoom(DEFAULT_MAP_ZOOM)
-            mapViewModel.setLoadingFinished()
+            onMapZoomChange(DEFAULT_MAP_ZOOM)
+            onLoadingFinished()
             return true
         }
         delay(LOCATION_DETECTION_DELAY_MS)
@@ -232,20 +241,21 @@ private suspend fun tryToFindAndCenterUserLocation(
  */
 private fun centerOnDefaultLocation(
     mapView: MapView,
-    mapViewModel: MapViewModel
+    onMapZoomChange: (Double) -> Unit,
+    onLoadingFinished: () -> Unit
 ) {
     // If location is not available after timeout, set default location
     mapView.controller.setZoom(WORLD_MAP_ZOOM)
     mapView.controller.setCenter(GeoPoint(0.0, 0.0))
-    mapViewModel.updateMapZoom(WORLD_MAP_ZOOM)
-    mapViewModel.setLoadingFinished()
+    onMapZoomChange(WORLD_MAP_ZOOM)
+    onLoadingFinished()
 }
 
 @Composable
 internal fun ManageMapViewLifecycle(
     mapView: MapView,
-    mapViewModel: MapViewModel,
-    locationOverlay: MyLocationNewOverlay
+    locationOverlay: MyLocationNewOverlay,
+    onLoadingStarted: () -> Unit
 ) {
     DisposableEffect(Unit) {
         mapView.onResume()
@@ -255,7 +265,7 @@ internal fun ManageMapViewLifecycle(
             mapView.overlays.clear()
             mapView.onPause()
             mapView.onDetach()
-            mapViewModel.setLoadingStarted()
+            onLoadingStarted()
         }
     }
 }

@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,13 +19,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
+import kotlinx.coroutines.flow.Flow
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
@@ -34,16 +34,19 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
 @Composable
 fun MapViewContainer(
-    mapViewModel: MapViewModel
+    isLoading: Boolean,
+    lastClickedLocation: GeoPoint?,
+    isPlaying: Boolean,
+    mapZoom: Double?,
+    goToPointEvent: Flow<GeoPoint>,
+    centerMapEvent: Flow<Unit>,
+    onClickedLocationChange: (GeoPoint?) -> Unit,
+    onUserLocationChange: (GeoPoint) -> Unit,
+    onMapZoomChange: (Double) -> Unit,
+    onLoadingStarted: () -> Unit,
+    onLoadingFinished: () -> Unit,
 ) {
     val context = LocalContext.current
-    val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
-
-    // Extract state from uiState
-    val isLoading = uiState.isLoading
-    val lastClickedLocation = uiState.lastClickedLocation
-    val isPlaying = uiState.isPlaying
-    val mapZoom = uiState.mapZoom
 
     // Remember MapView and overlays
     val mapView = rememberMapView(context)
@@ -54,12 +57,20 @@ fun MapViewContainer(
     AddLocationOverlayToMap(mapView, locationOverlay)
 
     // Handle map events and updates
-    HandleCenterMapEvent(mapView, locationOverlay, mapViewModel)
-    HandleGoToPointEvent(mapView, mapViewModel)
+    HandleCenterMapEvent(mapView, locationOverlay, centerMapEvent)
+    HandleGoToPointEvent(mapView, goToPointEvent, onClickedLocationChange)
     HandleMarkerUpdates(mapView, userMarker, lastClickedLocation)
-    SetupMapClickListener(mapView, mapViewModel, isPlaying)
-    CenterMapOnUserLocation(mapView, locationOverlay, mapViewModel, lastClickedLocation, mapZoom)
-    ManageMapViewLifecycle(mapView, mapViewModel, locationOverlay)
+    SetupMapClickListener(mapView, isPlaying, onClickedLocationChange)
+    CenterMapOnUserLocation(
+        mapView = mapView,
+        locationOverlay = locationOverlay,
+        lastClickedLocation = lastClickedLocation,
+        mapZoom = mapZoom,
+        onUserLocationChange = onUserLocationChange,
+        onMapZoomChange = onMapZoomChange,
+        onLoadingFinished = onLoadingFinished
+    )
+    ManageMapViewLifecycle(mapView, locationOverlay, onLoadingStarted)
 
     // Add MapListener to update zoom level
     DisposableEffect(mapView) {
@@ -70,9 +81,7 @@ fun MapViewContainer(
             }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
-                // Update zoom state through proper ViewModel methods
-                // This will be handled by the ViewModel's state update logic
-                mapViewModel.updateMapZoom(mapView.zoomLevelDouble)
+                onMapZoomChange(mapView.zoomLevelDouble)
                 return true
             }
         }
