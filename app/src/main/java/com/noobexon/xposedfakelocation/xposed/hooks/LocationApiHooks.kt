@@ -7,6 +7,8 @@ import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
 
+// TODO: in all hooks, we should check every 3 seconds if we are still in scope. isPlaying is not enough.
+
 class LocationApiHooks(private val module: XposedInterface, private val classLoader: ClassLoader) {
     private val tag = "[LocationApiHooks]"
 
