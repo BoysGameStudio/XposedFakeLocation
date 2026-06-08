@@ -52,12 +52,19 @@
     <string name="dialog_module_not_active_message">XposedFakeLocation 模块未在你的 Xposed 管理器中激活。请启用模块并重启应用后继续。</string>
 
     <string name="category_language">语言</string>
+    <string name="category_appearance">外观</string>
     <string name="category_notifications">通知</string>
     <string name="category_external_control">外部控制</string>
     <string name="category_system_hooks">系统级 Hook</string>
     <string name="category_location">位置</string>
     <string name="category_altitude">海拔</string>
     <string name="category_movement">移动</string>
+
+    <string name="setting_theme_title">应用主题</string>
+    <string name="setting_theme_description">设置管理器应用全局使用的配色方案。</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_dark">深色</string>
 
     <string name="setting_language_title">应用语言</string>
     <string name="setting_language_description">更改管理器应用及其 Xposed toast 提示所使用的语言。</string>

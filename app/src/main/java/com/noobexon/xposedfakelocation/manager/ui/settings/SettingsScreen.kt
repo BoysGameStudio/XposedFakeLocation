@@ -89,6 +89,7 @@ import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
 import com.noobexon.xposedfakelocation.manager.localization.LocaleController
+import com.noobexon.xposedfakelocation.manager.ui.theme.ThemeOption
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -173,6 +174,11 @@ fun SettingsScreen(
         ),
         SettingsCategory.EXTERNAL_CONTROL to listOf(
             SettingEntry.Switch(SettingKeys.BROADCAST, R.string.setting_external_broadcast_title, R.string.setting_external_broadcast_description, uiState.enableBroadcastControl, settingsViewModel::setEnableBroadcastControl)
+        ),
+        SettingsCategory.APPEARANCE to listOf(
+            SettingEntry.Theme(uiState.themeOption) { option ->
+                settingsViewModel.setTheme(option)
+            }
         ),
         SettingsCategory.LANGUAGE to listOf(
             SettingEntry.Language(selectedLanguage) { option ->
@@ -528,6 +534,10 @@ private fun SettingEntryRow(entry: SettingEntry) {
             selectedLanguage = entry.selected,
             onLanguageSelected = entry.onSelected
         )
+        is SettingEntry.Theme -> ThemeSettingItem(
+            selectedTheme = entry.selected,
+            onThemeSelected = entry.onSelected
+        )
     }
 }
 
@@ -770,6 +780,110 @@ private fun LanguageSelectionDialog(
                                 )
                             }
                         }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Theme picker row. Displays the setting title with an info tooltip button and the currently
+ * active theme name on the right. Tapping anywhere on the row opens [ThemeSelectionDialog];
+ * selecting an option there applies it immediately — no Activity recreation is required.
+ *
+ * @param selectedTheme Currently active [ThemeOption], shown in the collapsed row.
+ * @param onThemeSelected Invoked with the chosen [ThemeOption] after the user taps an item in
+ *   the dialog.
+ */
+@Composable
+private fun ThemeSettingItem(
+    selectedTheme: ThemeOption,
+    onThemeSelected: (ThemeOption) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    var showTooltip by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(Dimensions.SPACING_SMALL)
+    ) {
+        SettingHeader(
+            title = stringResource(R.string.setting_theme_title),
+            description = stringResource(R.string.setting_theme_description),
+            showTooltip = showTooltip,
+            onToggleTooltip = { showTooltip = !showTooltip },
+            onClick = { showDialog = true },
+            trailing = {
+                Text(
+                    text = stringResource(selectedTheme.labelRes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = Dimensions.SPACING_SMALL)
+                )
+            }
+        )
+    }
+
+    if (showDialog) {
+        ThemeSelectionDialog(
+            selectedTheme = selectedTheme,
+            onThemeSelected = {
+                onThemeSelected(it)
+                showDialog = false
+            },
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+/**
+ * Single-choice theme picker dialog. Each [ThemeOption] is displayed as a radio row with its
+ * localised label. Selecting a row immediately applies the theme — no restart needed.
+ *
+ * @param selectedTheme Currently active option, pre-selected in the list.
+ * @param onThemeSelected Invoked with the tapped [ThemeOption]; the dialog is then dismissed by
+ *   the caller ([ThemeSettingItem]).
+ * @param onDismiss Invoked when the dialog is dismissed without selecting an option (Cancel button
+ *   or outside tap).
+ */
+@Composable
+private fun ThemeSelectionDialog(
+    selectedTheme: ThemeOption,
+    onThemeSelected: (ThemeOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.setting_theme_title)) },
+        text = {
+            Column(modifier = Modifier.selectableGroup()) {
+                ThemeOption.entries.forEach { option ->
+                    val selected = option == selectedTheme
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimensions.SPACING_MEDIUM),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = { onThemeSelected(option) }
+                            )
+                            .padding(vertical = Dimensions.SPACING_SMALL)
+                    ) {
+                        RadioButton(selected = selected, onClick = null)
+                        Text(
+                            text = stringResource(option.labelRes),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
                 }
             }

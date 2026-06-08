@@ -54,12 +54,19 @@
     <string name="dialog_module_not_active_message">XposedFakeLocation module is not active in your Xposed manager app. Please enable it and restart the app to continue.</string>
 
     <string name="category_language">Language</string>
+    <string name="category_appearance">Appearance</string>
     <string name="category_notifications">Notifications</string>
     <string name="category_external_control">External Control</string>
     <string name="category_system_hooks">System Hooks</string>
     <string name="category_location">Location</string>
     <string name="category_altitude">Altitude</string>
     <string name="category_movement">Movement</string>
+
+    <string name="setting_theme_title">App theme</string>
+    <string name="setting_theme_description">Sets the colour scheme used throughout the manager app.</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
 
     <string name="setting_language_title">App language</string>
     <string name="setting_language_description">Changes the language used by the manager app and its Xposed toast messages.</string>

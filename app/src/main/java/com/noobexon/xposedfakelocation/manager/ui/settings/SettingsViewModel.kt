@@ -10,6 +10,8 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_THEME_OPTION
+import com.noobexon.xposedfakelocation.data.KEY_THEME_OPTION
 import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
 import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
@@ -31,6 +33,7 @@ import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
 import com.noobexon.xposedfakelocation.manager.App
 import com.noobexon.xposedfakelocation.manager.control.ControlReceiver
 import com.noobexon.xposedfakelocation.manager.localization.LocaleController
+import com.noobexon.xposedfakelocation.manager.ui.theme.ThemeOption
 import io.github.libxposed.service.XposedService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -271,6 +274,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository::saveLanguageTag
     )
 
+    private val _themeOption = Preference(
+        DEFAULT_THEME_OPTION,
+        preferencesRepository.getThemeOptionFlow(),
+        preferencesRepository::saveThemeOption
+    )
+
     // ---- UI state ----------------------------------------------------------------------------
 
     /**
@@ -311,6 +320,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .combine(_enableBroadcastControl.state)  { s, v -> s.copy(enableBroadcastControl = v) }
         .combine(enableSystemHooks)              { s, v -> s.copy(systemHooksEnabled = v) }
         .combine(_languageTag.state)             { s, v -> s.copy(languageTag = v) }
+        .combine(_themeOption.state)             { s, v -> s.copy(themeOption = ThemeOption.fromTag(v)) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
     // ---- Setters -----------------------------------------------------------------------------
@@ -418,6 +428,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setHideFakeLocationToast(value: Boolean) = _hideFakeLocationToast.set(value)
 
     /**
+     * Applies the given [option] as the active UI theme. The preference is persisted locally and
+     * reflected immediately in [SettingsUiState.themeOption]; [AppViewModel] observes the same
+     * underlying flow so [MainActivity] recomposes with the new [darkTheme] without any Activity
+     * recreation.
+     *
+     * @param option The [ThemeOption] to activate.
+     */
+    fun setTheme(option: ThemeOption) = _themeOption.set(option.tag)
+
+    /**
      * Selects the UI language identified by [tag]. Persists the choice through both the normal
      * [PreferencesRepository] store and [LocaleController]'s synchronous store, which
      * `attachBaseContext` reads before this ViewModel is created. The caller is responsible for
@@ -461,12 +481,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * `data/Constants.kt`). Updates all flows optimistically so the UI reflects the reset
      * immediately without waiting for disk writes.
      *
-     * Two preferences are intentionally excluded from this reset:
+     * Three preferences are intentionally excluded from this reset:
      * - **[enableSystemHooks]** — resetting it would trigger a live Xposed scope change, which
      *   requires the service, may fail, and prompts a reboot dialog.
      * - **[SettingsUiState.languageTag]** — resetting it would require recreating the Activity to
      *   apply the new locale, which is a disruptive side effect for a "reset spoofing defaults"
      *   action.
+     * - **[SettingsUiState.themeOption]** — an appearance preference unrelated to spoofing
+     *   behaviour; excluded for the same reason as language.
      */
     fun resetToDefaults() {
         setUseAccuracy(DEFAULT_USE_ACCURACY)

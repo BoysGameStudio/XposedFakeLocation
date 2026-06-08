@@ -6,6 +6,7 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_THEME_OPTION
 import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
 import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
@@ -23,6 +24,7 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_USE_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
+import com.noobexon.xposedfakelocation.manager.ui.theme.ThemeOption
 import kotlin.math.round
 
 /**
@@ -38,6 +40,7 @@ enum class SettingsCategory(@StringRes val titleRes: Int) {
     NOTIFICATIONS(R.string.category_notifications),
     SYSTEM_HOOKS(R.string.category_system_hooks),
     EXTERNAL_CONTROL(R.string.category_external_control),
+    APPEARANCE(R.string.category_appearance),
     LANGUAGE(R.string.category_language)
 }
 
@@ -146,6 +149,7 @@ object SettingKeys {
     const val HIDE_TOAST = "hide_toast"
     const val SYSTEM_HOOKS = "system_hooks"
     const val BROADCAST = "broadcast"
+    const val THEME = "theme"
     const val LANGUAGE = "language"
 }
 
@@ -219,6 +223,23 @@ sealed interface SettingEntry {
         override val titleRes: Int get() = R.string.setting_language_title
         override val descriptionRes: Int get() = R.string.setting_language_description
     }
+
+    /**
+     * The theme picker row. Tapping anywhere on the row opens a theme selection dialog; selecting
+     * an option there applies it immediately — no Activity recreation required.
+     *
+     * @property selected The currently active [ThemeOption], shown collapsed in the row.
+     * @property onSelected Callback invoked with the chosen [ThemeOption] when the user taps an
+     *   item in the dialog.
+     */
+    data class Theme(
+        val selected: ThemeOption,
+        val onSelected: (ThemeOption) -> Unit
+    ) : SettingEntry {
+        override val key: String get() = SettingKeys.THEME
+        override val titleRes: Int get() = R.string.setting_theme_title
+        override val descriptionRes: Int get() = R.string.setting_theme_description
+    }
 }
 
 /**
@@ -257,4 +278,5 @@ data class SettingsUiState(
     val systemHooksEnabled: Boolean = DEFAULT_ENABLE_SYSTEM_HOOKS,
     // App
     val languageTag: String = DEFAULT_LANGUAGE_TAG,
+    val themeOption: ThemeOption = ThemeOption.fromTag(DEFAULT_THEME_OPTION),
 )

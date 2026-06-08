@@ -46,6 +46,8 @@ const val KEY_LANGUAGE_TAG = "language_tag"
 
 const val KEY_ENABLE_SYSTEM_HOOKS = "enable_system_hooks"
 
+const val KEY_THEME_OPTION = "theme_option"
+
 // Packages added/removed from module scope when system-level hooks are toggled.
 val SYSTEM_HOOK_PACKAGES = listOf("android", "com.android.phone")
 
@@ -80,6 +82,8 @@ const val DEFAULT_ENABLE_BROADCAST_CONTROL = false
 const val DEFAULT_LANGUAGE_TAG = ""
 
 const val DEFAULT_ENABLE_SYSTEM_HOOKS = false
+
+const val DEFAULT_THEME_OPTION = ""
 
 // MATH & PHYS
 const val PI = 3.14159265359
