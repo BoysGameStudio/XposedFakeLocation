@@ -18,6 +18,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -26,6 +27,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -52,10 +56,19 @@ fun PermissionsScreen(
         }
     )
 
-    // Trigger the initial check once. Does not navigate — navigation is handled by the
-    // effect below that reacts to the resulting state change.
-    LaunchedEffect(Unit) {
-        permissionsViewModel.checkPermissions(context)
+    // Re-check permissions every time the screen resumes. addObserver replays ON_RESUME
+    // synchronously if the lifecycle is already in RESUMED state, so this also covers the
+    // initial load. When the user returns from the Settings app after granting the permission
+    // manually, the next ON_RESUME triggers a fresh check and the navigation effect below fires.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionsViewModel.checkPermissions(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Navigate as soon as permissions are confirmed granted. Keyed on both fields so the
