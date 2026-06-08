@@ -4,11 +4,23 @@ import androidx.annotation.StringRes
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
+import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
 import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_RANDOMIZE_RADIUS
 import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED
 import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_RANDOMIZE
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.manager.localization.LanguageOption
 import kotlin.math.round
@@ -208,3 +220,41 @@ sealed interface SettingEntry {
         override val descriptionRes: Int get() = R.string.setting_language_description
     }
 }
+
+/**
+ * Immutable snapshot of all spoofing and app preferences consumed by the settings UI. Every
+ * numeric field is [Float] so the UI layer works uniformly without per-field
+ * [Double]/[Float] conversions. [Double]-typed repository values are converted once in
+ * [SettingsViewModel.uiState] before reaching this class.
+ *
+ * Default values mirror the constants in `data/Constants.kt` so that
+ * [SettingsViewModel.uiState]'s `initialValue` is always consistent with
+ * [SettingsViewModel.resetToDefaults].
+ */
+data class SettingsUiState(
+    // Location
+    val useRandomize: Boolean = DEFAULT_USE_RANDOMIZE,
+    val randomizeRadius: Float = DEFAULT_RANDOMIZE_RADIUS.toFloat(),
+    val useAccuracy: Boolean = DEFAULT_USE_ACCURACY,
+    val accuracy: Float = DEFAULT_ACCURACY.toFloat(),
+    val useVerticalAccuracy: Boolean = DEFAULT_USE_VERTICAL_ACCURACY,
+    val verticalAccuracy: Float = DEFAULT_VERTICAL_ACCURACY,
+    // Altitude
+    val useAltitude: Boolean = DEFAULT_USE_ALTITUDE,
+    val altitude: Float = DEFAULT_ALTITUDE.toFloat(),
+    val useMeanSeaLevel: Boolean = DEFAULT_USE_MEAN_SEA_LEVEL,
+    val meanSeaLevel: Float = DEFAULT_MEAN_SEA_LEVEL.toFloat(),
+    val useMeanSeaLevelAccuracy: Boolean = DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY,
+    val meanSeaLevelAccuracy: Float = DEFAULT_MEAN_SEA_LEVEL_ACCURACY,
+    // Movement
+    val useSpeed: Boolean = DEFAULT_USE_SPEED,
+    val speed: Float = DEFAULT_SPEED,
+    val useSpeedAccuracy: Boolean = DEFAULT_USE_SPEED_ACCURACY,
+    val speedAccuracy: Float = DEFAULT_SPEED_ACCURACY,
+    // Behaviour
+    val hideFakeLocationToast: Boolean = DEFAULT_HIDE_FAKE_LOCATION_TOAST,
+    val enableBroadcastControl: Boolean = DEFAULT_ENABLE_BROADCAST_CONTROL,
+    val systemHooksEnabled: Boolean = DEFAULT_ENABLE_SYSTEM_HOOKS,
+    // App
+    val languageTag: String = DEFAULT_LANGUAGE_TAG,
+)

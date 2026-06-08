@@ -106,10 +106,10 @@ private object Dimensions {
 
 /**
  * Entry point for the settings destination. Acts as a state holder: owns the [SettingsViewModel],
- * collects every preference [kotlinx.coroutines.flow.StateFlow], builds the declarative
- * [SettingEntry] category list, and handles one-shot [SystemHooksEvent]s with lifecycle awareness
- * (restart dialog / snackbar). All layout is delegated to the stateless [SettingsContent], keeping
- * it previewable and testable independently.
+ * collects [SettingsViewModel.uiState] as a single snapshot, builds the declarative [SettingEntry]
+ * category list, and handles one-shot [SystemHooksEvent]s with lifecycle awareness (restart dialog
+ * / snackbar). All layout is delegated to the stateless [SettingsContent], keeping it previewable
+ * and testable independently.
  *
  * @param navController Used to navigate back when the user taps the top-bar navigation icon.
  * @param settingsViewModel Backing ViewModel; defaults to the screen-scoped instance from
@@ -146,50 +146,32 @@ fun SettingsScreen(
         }
     }
 
-    val selectedLanguage = LanguageOption.fromTag(settingsViewModel.languageTag.collectAsStateWithLifecycle().value)
-    val hideToast by settingsViewModel.hideFakeLocationToast.collectAsStateWithLifecycle()
-    val broadcast by settingsViewModel.enableBroadcastControl.collectAsStateWithLifecycle()
-    val systemHooks by settingsViewModel.enableSystemHooks.collectAsStateWithLifecycle()
-    val useRandomize by settingsViewModel.useRandomize.collectAsStateWithLifecycle()
-    val randomizeRadius by settingsViewModel.randomizeRadius.collectAsStateWithLifecycle()
-    val useAccuracy by settingsViewModel.useAccuracy.collectAsStateWithLifecycle()
-    val accuracy by settingsViewModel.accuracy.collectAsStateWithLifecycle()
-    val useVerticalAccuracy by settingsViewModel.useVerticalAccuracy.collectAsStateWithLifecycle()
-    val verticalAccuracy by settingsViewModel.verticalAccuracy.collectAsStateWithLifecycle()
-    val useAltitude by settingsViewModel.useAltitude.collectAsStateWithLifecycle()
-    val altitude by settingsViewModel.altitude.collectAsStateWithLifecycle()
-    val useMeanSeaLevel by settingsViewModel.useMeanSeaLevel.collectAsStateWithLifecycle()
-    val meanSeaLevel by settingsViewModel.meanSeaLevel.collectAsStateWithLifecycle()
-    val useMeanSeaLevelAccuracy by settingsViewModel.useMeanSeaLevelAccuracy.collectAsStateWithLifecycle()
-    val meanSeaLevelAccuracy by settingsViewModel.meanSeaLevelAccuracy.collectAsStateWithLifecycle()
-    val useSpeed by settingsViewModel.useSpeed.collectAsStateWithLifecycle()
-    val speed by settingsViewModel.speed.collectAsStateWithLifecycle()
-    val useSpeedAccuracy by settingsViewModel.useSpeedAccuracy.collectAsStateWithLifecycle()
-    val speedAccuracy by settingsViewModel.speedAccuracy.collectAsStateWithLifecycle()
+    val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val selectedLanguage = LanguageOption.fromTag(uiState.languageTag)
 
     val categories: List<Pair<SettingsCategory, List<SettingEntry>>> = listOf(
         SettingsCategory.LOCATION to listOf(
-            SettingEntry.Numeric(NumericSetting.RANDOMIZE_RADIUS, useRandomize, settingsViewModel::setUseRandomize, randomizeRadius.toFloat()) { settingsViewModel.setRandomizeRadius(it.toDouble()) },
-            SettingEntry.Numeric(NumericSetting.HORIZONTAL_ACCURACY, useAccuracy, settingsViewModel::setUseAccuracy, accuracy.toFloat()) { settingsViewModel.setAccuracy(it.toDouble()) },
-            SettingEntry.Numeric(NumericSetting.VERTICAL_ACCURACY, useVerticalAccuracy, settingsViewModel::setUseVerticalAccuracy, verticalAccuracy, settingsViewModel::setVerticalAccuracy)
+            SettingEntry.Numeric(NumericSetting.RANDOMIZE_RADIUS, uiState.useRandomize, settingsViewModel::setUseRandomize, uiState.randomizeRadius) { settingsViewModel.setRandomizeRadius(it.toDouble()) },
+            SettingEntry.Numeric(NumericSetting.HORIZONTAL_ACCURACY, uiState.useAccuracy, settingsViewModel::setUseAccuracy, uiState.accuracy) { settingsViewModel.setAccuracy(it.toDouble()) },
+            SettingEntry.Numeric(NumericSetting.VERTICAL_ACCURACY, uiState.useVerticalAccuracy, settingsViewModel::setUseVerticalAccuracy, uiState.verticalAccuracy, settingsViewModel::setVerticalAccuracy)
         ),
         SettingsCategory.ALTITUDE to listOf(
-            SettingEntry.Numeric(NumericSetting.ALTITUDE, useAltitude, settingsViewModel::setUseAltitude, altitude.toFloat()) { settingsViewModel.setAltitude(it.toDouble()) },
-            SettingEntry.Numeric(NumericSetting.MEAN_SEA_LEVEL, useMeanSeaLevel, settingsViewModel::setUseMeanSeaLevel, meanSeaLevel.toFloat()) { settingsViewModel.setMeanSeaLevel(it.toDouble()) },
-            SettingEntry.Numeric(NumericSetting.MEAN_SEA_LEVEL_ACCURACY, useMeanSeaLevelAccuracy, settingsViewModel::setUseMeanSeaLevelAccuracy, meanSeaLevelAccuracy, settingsViewModel::setMeanSeaLevelAccuracy)
+            SettingEntry.Numeric(NumericSetting.ALTITUDE, uiState.useAltitude, settingsViewModel::setUseAltitude, uiState.altitude) { settingsViewModel.setAltitude(it.toDouble()) },
+            SettingEntry.Numeric(NumericSetting.MEAN_SEA_LEVEL, uiState.useMeanSeaLevel, settingsViewModel::setUseMeanSeaLevel, uiState.meanSeaLevel) { settingsViewModel.setMeanSeaLevel(it.toDouble()) },
+            SettingEntry.Numeric(NumericSetting.MEAN_SEA_LEVEL_ACCURACY, uiState.useMeanSeaLevelAccuracy, settingsViewModel::setUseMeanSeaLevelAccuracy, uiState.meanSeaLevelAccuracy, settingsViewModel::setMeanSeaLevelAccuracy)
         ),
         SettingsCategory.MOVEMENT to listOf(
-            SettingEntry.Numeric(NumericSetting.SPEED, useSpeed, settingsViewModel::setUseSpeed, speed, settingsViewModel::setSpeed),
-            SettingEntry.Numeric(NumericSetting.SPEED_ACCURACY, useSpeedAccuracy, settingsViewModel::setUseSpeedAccuracy, speedAccuracy, settingsViewModel::setSpeedAccuracy)
+            SettingEntry.Numeric(NumericSetting.SPEED, uiState.useSpeed, settingsViewModel::setUseSpeed, uiState.speed, settingsViewModel::setSpeed),
+            SettingEntry.Numeric(NumericSetting.SPEED_ACCURACY, uiState.useSpeedAccuracy, settingsViewModel::setUseSpeedAccuracy, uiState.speedAccuracy, settingsViewModel::setSpeedAccuracy)
         ),
         SettingsCategory.NOTIFICATIONS to listOf(
-            SettingEntry.Switch(SettingKeys.HIDE_TOAST, R.string.setting_hide_toast_title, R.string.setting_hide_toast_description, hideToast, settingsViewModel::setHideFakeLocationToast)
+            SettingEntry.Switch(SettingKeys.HIDE_TOAST, R.string.setting_hide_toast_title, R.string.setting_hide_toast_description, uiState.hideFakeLocationToast, settingsViewModel::setHideFakeLocationToast)
         ),
         SettingsCategory.SYSTEM_HOOKS to listOf(
-            SettingEntry.Switch(SettingKeys.SYSTEM_HOOKS, R.string.setting_system_hooks_title, R.string.setting_system_hooks_description, systemHooks, settingsViewModel::setEnableSystemHooks)
+            SettingEntry.Switch(SettingKeys.SYSTEM_HOOKS, R.string.setting_system_hooks_title, R.string.setting_system_hooks_description, uiState.systemHooksEnabled, settingsViewModel::setEnableSystemHooks)
         ),
         SettingsCategory.EXTERNAL_CONTROL to listOf(
-            SettingEntry.Switch(SettingKeys.BROADCAST, R.string.setting_external_broadcast_title, R.string.setting_external_broadcast_description, broadcast, settingsViewModel::setEnableBroadcastControl)
+            SettingEntry.Switch(SettingKeys.BROADCAST, R.string.setting_external_broadcast_title, R.string.setting_external_broadcast_description, uiState.enableBroadcastControl, settingsViewModel::setEnableBroadcastControl)
         ),
         SettingsCategory.LANGUAGE to listOf(
             SettingEntry.Language(selectedLanguage) { option ->

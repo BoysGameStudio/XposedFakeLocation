@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -78,9 +79,9 @@ sealed interface SystemHooksEvent {
 private const val TAG = "SettingsViewModel"
 
 /**
- * Backs the settings screen. Exposes every spoofing and app preference as a hot [StateFlow] for the
- * UI to observe, with a matching setter that updates the flow optimistically and persists through
- * [PreferencesRepository].
+ * Backs the settings screen. Exposes all spoofing and app preferences as a single [uiState]
+ * [StateFlow] that the UI collects once, with per-preference setters that update state optimistically
+ * and persist through [PreferencesRepository].
  *
  * All standard preferences are managed by the private [Preference] holder. System-level hooks are
  * the exception: they require a live Xposed service call that may fail or need a reboot, so their
@@ -150,144 +151,81 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getUseAccuracyFlow(),
         preferencesRepository::saveUseAccuracy
     )
-
-    /** Whether the spoofed location reports a custom horizontal accuracy radius ([accuracy]). */
-    val useAccuracy: StateFlow<Boolean> = _useAccuracy.state
-
     private val _accuracy = Preference(
         DEFAULT_ACCURACY,
         preferencesRepository.getAccuracyFlow(),
         preferencesRepository::saveAccuracy
     )
-
-    /** Horizontal accuracy radius reported with the spoofed location, in metres. */
-    val accuracy: StateFlow<Double> = _accuracy.state
-
     private val _useAltitude = Preference(
         DEFAULT_USE_ALTITUDE,
         preferencesRepository.getUseAltitudeFlow(),
         preferencesRepository::saveUseAltitude
     )
-
-    /** Whether the spoofed location reports a custom ellipsoidal [altitude]. */
-    val useAltitude: StateFlow<Boolean> = _useAltitude.state
-
     private val _altitude = Preference(
         DEFAULT_ALTITUDE,
         preferencesRepository.getAltitudeFlow(),
         preferencesRepository::saveAltitude
     )
-
-    /** Altitude above the WGS84 ellipsoid reported with the spoofed location, in metres. */
-    val altitude: StateFlow<Double> = _altitude.state
-
     private val _useRandomize = Preference(
         DEFAULT_USE_RANDOMIZE,
         preferencesRepository.getUseRandomizeFlow(),
         preferencesRepository::saveUseRandomize
     )
-
-    /** Whether each reported location is jittered within [randomizeRadius] of the chosen point. */
-    val useRandomize: StateFlow<Boolean> = _useRandomize.state
-
     private val _randomizeRadius = Preference(
         DEFAULT_RANDOMIZE_RADIUS,
         preferencesRepository.getRandomizeRadiusFlow(),
         preferencesRepository::saveRandomizeRadius
     )
-
-    /** Radius of the per-fix randomisation circle around the chosen point, in metres. */
-    val randomizeRadius: StateFlow<Double> = _randomizeRadius.state
-
     private val _useVerticalAccuracy = Preference(
         DEFAULT_USE_VERTICAL_ACCURACY,
         preferencesRepository.getUseVerticalAccuracyFlow(),
         preferencesRepository::saveUseVerticalAccuracy
     )
-
-    /** Whether the spoofed location reports a custom [verticalAccuracy]. */
-    val useVerticalAccuracy: StateFlow<Boolean> = _useVerticalAccuracy.state
-
     private val _verticalAccuracy = Preference(
         DEFAULT_VERTICAL_ACCURACY,
         preferencesRepository.getVerticalAccuracyFlow(),
         preferencesRepository::saveVerticalAccuracy
     )
-
-    /** Vertical (altitude) accuracy reported with the spoofed location, in metres. */
-    val verticalAccuracy: StateFlow<Float> = _verticalAccuracy.state
-
     private val _useMeanSeaLevel = Preference(
         DEFAULT_USE_MEAN_SEA_LEVEL,
         preferencesRepository.getUseMeanSeaLevelFlow(),
         preferencesRepository::saveUseMeanSeaLevel
     )
-
-    /** Whether the spoofed location reports a custom mean-sea-level altitude ([meanSeaLevel]). */
-    val useMeanSeaLevel: StateFlow<Boolean> = _useMeanSeaLevel.state
-
     private val _meanSeaLevel = Preference(
         DEFAULT_MEAN_SEA_LEVEL,
         preferencesRepository.getMeanSeaLevelFlow(),
         preferencesRepository::saveMeanSeaLevel
     )
-
-    /** Mean-sea-level (MSL) altitude reported with the spoofed location, in metres. */
-    val meanSeaLevel: StateFlow<Double> = _meanSeaLevel.state
-
     private val _useMeanSeaLevelAccuracy = Preference(
         DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY,
         preferencesRepository.getUseMeanSeaLevelAccuracyFlow(),
         preferencesRepository::saveUseMeanSeaLevelAccuracy
     )
-
-    /** Whether the spoofed location reports a custom [meanSeaLevelAccuracy]. */
-    val useMeanSeaLevelAccuracy: StateFlow<Boolean> = _useMeanSeaLevelAccuracy.state
-
     private val _meanSeaLevelAccuracy = Preference(
         DEFAULT_MEAN_SEA_LEVEL_ACCURACY,
         preferencesRepository.getMeanSeaLevelAccuracyFlow(),
         preferencesRepository::saveMeanSeaLevelAccuracy
     )
-
-    /** Accuracy of the reported mean-sea-level altitude, in metres. */
-    val meanSeaLevelAccuracy: StateFlow<Float> = _meanSeaLevelAccuracy.state
-
     private val _useSpeed = Preference(
         DEFAULT_USE_SPEED,
         preferencesRepository.getUseSpeedFlow(),
         preferencesRepository::saveUseSpeed
     )
-
-    /** Whether the spoofed location reports a custom ground [speed]. */
-    val useSpeed: StateFlow<Boolean> = _useSpeed.state
-
     private val _speed = Preference(
         DEFAULT_SPEED,
         preferencesRepository.getSpeedFlow(),
         preferencesRepository::saveSpeed
     )
-
-    /** Ground speed reported with the spoofed location, in metres per second. */
-    val speed: StateFlow<Float> = _speed.state
-
     private val _useSpeedAccuracy = Preference(
         DEFAULT_USE_SPEED_ACCURACY,
         preferencesRepository.getUseSpeedAccuracyFlow(),
         preferencesRepository::saveUseSpeedAccuracy
     )
-
-    /** Whether the spoofed location reports a custom [speedAccuracy]. */
-    val useSpeedAccuracy: StateFlow<Boolean> = _useSpeedAccuracy.state
-
     private val _speedAccuracy = Preference(
         DEFAULT_SPEED_ACCURACY,
         preferencesRepository.getSpeedAccuracyFlow(),
         preferencesRepository::saveSpeedAccuracy
     )
-
-    /** Accuracy of the reported ground speed, in metres per second. */
-    val speedAccuracy: StateFlow<Float> = _speedAccuracy.state
 
     // ---- Behaviour preferences ---------------------------------------------------------------
 
@@ -297,12 +235,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository::saveHideFakeLocationToast
     )
 
-    /**
-     * Whether the per-fix toast shown by the Xposed hook when a fake location is served is
-     * suppressed. Useful to reduce visual noise when spoofing continuously in the background.
-     */
-    val hideFakeLocationToast: StateFlow<Boolean> = _hideFakeLocationToast.state
-
     // ---- External control --------------------------------------------------------------------
 
     private val _enableBroadcastControl = Preference(
@@ -310,13 +242,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository.getEnableBroadcastControlFlow(),
         preferencesRepository::saveEnableBroadcastControl
     )
-
-    /**
-     * Whether the external broadcast [ControlReceiver] is enabled, allowing other apps or ADB to
-     * start/stop spoofing via broadcasts. Kept in sync with the receiver's manifest component state
-     * by [setEnableBroadcastControl] so the stored flag and the exported state never diverge.
-     */
-    val enableBroadcastControl: StateFlow<Boolean> = _enableBroadcastControl.state
 
     // ---- System hooks ------------------------------------------------------------------------
 
@@ -346,11 +271,46 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         preferencesRepository::saveLanguageTag
     )
 
+    // ---- UI state ----------------------------------------------------------------------------
+
     /**
-     * BCP-47 language tag of the currently selected UI language (e.g. `"en"`, `"zh"`), or an
-     * empty string to follow the device's system locale.
+     * Single atomic snapshot of every preference exposed to the settings UI. Combines all
+     * individual [Preference] states and [enableSystemHooks] into one [StateFlow] so the screen
+     * collects once and receives a complete, consistent update on every change.
+     *
+     * [Double]-typed repository values ([accuracy], [altitude], [meanSeaLevel], [randomizeRadius])
+     * are converted to [Float] here, so the UI layer works uniformly in [Float] without
+     * per-field conversion at the collection site.
      */
-    val languageTag: StateFlow<String> = _languageTag.state
+    val uiState: StateFlow<SettingsUiState> = combine(
+        _useRandomize.state, _randomizeRadius.state,
+        _useAccuracy.state, _accuracy.state,
+        _useVerticalAccuracy.state
+    ) { useRand, rand, useAcc, acc, useVert ->
+        SettingsUiState(
+            useRandomize = useRand,
+            randomizeRadius = rand.toFloat(),
+            useAccuracy = useAcc,
+            accuracy = acc.toFloat(),
+            useVerticalAccuracy = useVert,
+        )
+    }
+        .combine(_verticalAccuracy.state)        { s, v -> s.copy(verticalAccuracy = v) }
+        .combine(_useAltitude.state)             { s, v -> s.copy(useAltitude = v) }
+        .combine(_altitude.state)                { s, v -> s.copy(altitude = v.toFloat()) }
+        .combine(_useMeanSeaLevel.state)         { s, v -> s.copy(useMeanSeaLevel = v) }
+        .combine(_meanSeaLevel.state)            { s, v -> s.copy(meanSeaLevel = v.toFloat()) }
+        .combine(_useMeanSeaLevelAccuracy.state) { s, v -> s.copy(useMeanSeaLevelAccuracy = v) }
+        .combine(_meanSeaLevelAccuracy.state)    { s, v -> s.copy(meanSeaLevelAccuracy = v) }
+        .combine(_useSpeed.state)                { s, v -> s.copy(useSpeed = v) }
+        .combine(_speed.state)                   { s, v -> s.copy(speed = v) }
+        .combine(_useSpeedAccuracy.state)        { s, v -> s.copy(useSpeedAccuracy = v) }
+        .combine(_speedAccuracy.state)           { s, v -> s.copy(speedAccuracy = v) }
+        .combine(_hideFakeLocationToast.state)   { s, v -> s.copy(hideFakeLocationToast = v) }
+        .combine(_enableBroadcastControl.state)  { s, v -> s.copy(enableBroadcastControl = v) }
+        .combine(enableSystemHooks)              { s, v -> s.copy(systemHooksEnabled = v) }
+        .combine(_languageTag.state)             { s, v -> s.copy(languageTag = v) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
     // ---- Setters -----------------------------------------------------------------------------
 
