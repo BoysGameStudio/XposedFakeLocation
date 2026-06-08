@@ -3,6 +3,7 @@ package com.noobexon.xposedfakelocation.manager.ui.theme
 import androidx.annotation.StringRes
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.DEFAULT_THEME_OPTION
+import com.noobexon.xposedfakelocation.manager.ui.theme.ThemeOption.Companion.fromTag
 
 /**
  * The set of UI themes the user can choose from in settings.
