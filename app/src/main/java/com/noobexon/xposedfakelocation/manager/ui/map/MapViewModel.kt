@@ -30,8 +30,9 @@ private val LONGITUDE_RANGE = -180.0..180.0
  * [Channel]-backed [Flow]s, and provides typed mutation functions so the UI never writes directly to
  * [_uiState].
  *
- * **Persistence**: [isPlaying] and [MapUiState.lastClickedLocation] are kept in sync with
- * [PreferencesRepository] — both are read on init and written back whenever they change.
+ * **Persistence**: [MapUiState.isPlaying], [MapUiState.lastClickedLocation], and [MapUiState.mapZoom]
+ * are kept in sync with [PreferencesRepository] — all three are read on init and written back
+ * whenever they change, so they survive the app being fully closed and reopened.
  *
  * **Dialog lifecycle**: each dialog has a paired `show*` / `hide*` function that guards setup and
  * teardown. The corresponding `confirm*` function validates input; on success it acts (emits event
@@ -45,7 +46,9 @@ private val LONGITUDE_RANGE = -180.0..180.0
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
 
-    private val _uiState = MutableStateFlow(MapUiState())
+    private val _uiState = MutableStateFlow(
+        MapUiState(mapZoom = preferencesRepository.getMapZoom())
+    )
 
     /** Snapshot of the full Map-screen UI state, updated atomically. */
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
@@ -130,14 +133,15 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Stores the map's current zoom level so it can be restored when the screen is re-entered.
-     * Called from [MapViewEffects.ManageMapViewLifecycle] on dispose (i.e. when the user navigates
-     * away), capturing the zoom at the exact moment the map is torn down.
+     * Stores the map's current zoom level so it can be restored when the screen is re-entered or
+     * the app is reopened after being fully closed. Called from [MapViewEffects.ManageMapViewLifecycle]
+     * on dispose, capturing the zoom at the exact moment the map is torn down.
      *
      * @param zoom The zoom level to persist.
      */
     fun updateMapZoom(zoom: Double) {
         _uiState.update { it.copy(mapZoom = zoom) }
+        preferencesRepository.saveMapZoom(zoom)
     }
 
     /**

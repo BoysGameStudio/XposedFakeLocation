@@ -254,9 +254,9 @@ internal fun CenterMapOnUserLocation(
         } else {
             val lastKnown = getLastKnownDeviceLocation(context)
             if (lastKnown != null) {
-                centerOnGeoPoint(mapView, lastKnown, onUserLocationChange, onMapZoomChange, onLoadingFinished)
+                centerOnGeoPoint(mapView, lastKnown, mapZoom, onUserLocationChange, onMapZoomChange, onLoadingFinished)
             } else {
-                val found = tryToFindAndCenterUserLocation(mapView, locationOverlay, onUserLocationChange, onMapZoomChange, onLoadingFinished)
+                val found = tryToFindAndCenterUserLocation(mapView, locationOverlay, mapZoom, onUserLocationChange, onMapZoomChange, onLoadingFinished)
                 if (!found) {
                     centerOnDefaultLocation(mapView, onMapZoomChange, onLoadingFinished)
                 }
@@ -294,12 +294,15 @@ private suspend fun centerOnMarkerLocation(
 }
 
 /**
- * Centres the camera on [point] at [DEFAULT_MAP_ZOOM] and propagates the resolved location and
- * zoom up to the ViewModel. Used when a last-known device location is available instantly without
- * polling.
+ * Centres the camera on [point] and propagates the resolved location and zoom up to the ViewModel.
+ * Used when a last-known device location is available instantly without polling.
+ *
+ * Uses the persisted [mapZoom] when available so the zoom level is exactly as the user left it,
+ * falling back to [DEFAULT_MAP_ZOOM] for first-ever launches.
  *
  * @param mapView The map to centre.
  * @param point The device location to centre on.
+ * @param mapZoom Persisted zoom level, or `null` if not yet set.
  * @param onUserLocationChange Callback to cache the location in [MapViewModel].
  * @param onMapZoomChange Callback to persist the applied zoom.
  * @param onLoadingFinished Callback to clear [MapUiState.isLoading].
@@ -307,14 +310,16 @@ private suspend fun centerOnMarkerLocation(
 private fun centerOnGeoPoint(
     mapView: MapView,
     point: GeoPoint,
+    mapZoom: Double?,
     onUserLocationChange: (GeoPoint) -> Unit,
     onMapZoomChange: (Double) -> Unit,
     onLoadingFinished: () -> Unit
 ) {
-    mapView.controller.setZoom(DEFAULT_MAP_ZOOM)
+    val zoom = mapZoom ?: DEFAULT_MAP_ZOOM
+    mapView.controller.setZoom(zoom)
     mapView.controller.setCenter(point)
     onUserLocationChange(point)
-    onMapZoomChange(DEFAULT_MAP_ZOOM)
+    onMapZoomChange(zoom)
     onLoadingFinished()
 }
 
@@ -364,8 +369,12 @@ private suspend fun getLastKnownDeviceLocation(context: Context): GeoPoint? = wi
  * and gives the GPS/network provider a short window to acquire one before falling back to
  * [centerOnDefaultLocation].
  *
+ * Uses the persisted [mapZoom] when available so the zoom level is exactly as the user left it,
+ * falling back to [DEFAULT_MAP_ZOOM] for first-ever launches.
+ *
  * @param mapView The map to centre if a location is found.
  * @param locationOverlay Source of live location fixes.
+ * @param mapZoom Persisted zoom level, or `null` if not yet set.
  * @param onUserLocationChange Callback to cache the location in [MapViewModel].
  * @param onMapZoomChange Callback to persist the applied zoom.
  * @param onLoadingFinished Callback to clear [MapUiState.isLoading].
@@ -374,18 +383,19 @@ private suspend fun getLastKnownDeviceLocation(context: Context): GeoPoint? = wi
 private suspend fun tryToFindAndCenterUserLocation(
     mapView: MapView,
     locationOverlay: MyLocationNewOverlay,
+    mapZoom: Double?,
     onUserLocationChange: (GeoPoint) -> Unit,
     onMapZoomChange: (Double) -> Unit,
     onLoadingFinished: () -> Unit
 ): Boolean {
-    // Attempt to find user location within a timeout period
+    val zoom = mapZoom ?: DEFAULT_MAP_ZOOM
     repeat(LOCATION_DETECTION_MAX_ATTEMPTS) {
         val userLocation = locationOverlay.myLocation
         if (userLocation != null) {
             onUserLocationChange(userLocation)
-            mapView.controller.setZoom(DEFAULT_MAP_ZOOM)
+            mapView.controller.setZoom(zoom)
             mapView.controller.animateTo(userLocation)
-            onMapZoomChange(DEFAULT_MAP_ZOOM)
+            onMapZoomChange(zoom)
             onLoadingFinished()
             return true
         }

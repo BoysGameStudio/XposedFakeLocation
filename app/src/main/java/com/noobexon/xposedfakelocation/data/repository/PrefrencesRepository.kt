@@ -33,7 +33,9 @@ import com.noobexon.xposedfakelocation.data.KEY_ACCURACY
 import com.noobexon.xposedfakelocation.data.KEY_ALTITUDE
 import com.noobexon.xposedfakelocation.data.KEY_ENABLE_BROADCAST_CONTROL
 import com.noobexon.xposedfakelocation.data.KEY_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
 import com.noobexon.xposedfakelocation.data.KEY_FAVORITES
+import com.noobexon.xposedfakelocation.data.KEY_MAP_ZOOM
 import com.noobexon.xposedfakelocation.data.KEY_HIDE_FAKE_LOCATION_TOAST
 import com.noobexon.xposedfakelocation.data.KEY_IS_PLAYING
 import com.noobexon.xposedfakelocation.data.KEY_LANGUAGE_TAG
@@ -329,6 +331,16 @@ class PreferencesRepository(context: Context) {
             emptyList()
         }
     }
+    // endregion
+
+    // region Map Zoom (local)
+    fun getMapZoom(): Double {
+        val bits = localPrefs.getLong(KEY_MAP_ZOOM, java.lang.Double.doubleToRawLongBits(DEFAULT_MAP_ZOOM))
+        return java.lang.Double.longBitsToDouble(bits)
+    }
+
+    fun saveMapZoom(zoom: Double) =
+        editLocal { putLong(KEY_MAP_ZOOM, java.lang.Double.doubleToRawLongBits(zoom)) }
     // endregion
 
     // region Broadcast Control (local)
