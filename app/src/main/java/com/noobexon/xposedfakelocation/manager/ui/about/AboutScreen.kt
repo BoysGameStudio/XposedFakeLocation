@@ -56,6 +56,16 @@ import coil.compose.AsyncImage
 import com.noobexon.xposedfakelocation.BuildConfig
 import com.noobexon.xposedfakelocation.R
 
+/**
+ * Entry-point composable for the About screen.
+ *
+ * Collects [AboutViewModel.contributorsState] and [AboutViewModel.developerFallback] and passes
+ * them down to the stateless [AboutContent]. The ViewModel is scoped to this composable so it is
+ * the only correct injection point.
+ *
+ * @param navController Used by [AboutTopAppBar] to navigate back to the previous destination.
+ * @param viewModel The ViewModel that owns the contributor-fetch lifecycle.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
@@ -78,6 +88,14 @@ fun AboutScreen(
     }
 }
 
+/**
+ * Top app bar for the About screen with a back-navigation icon.
+ *
+ * Uses the theme's primary colour for its background and contrasting colours for content,
+ * consistent with the rest of the app's top bars.
+ *
+ * @param navController Used to call [NavController.navigateUp] when the back icon is tapped.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AboutTopAppBar(navController: NavController) {
@@ -100,6 +118,19 @@ private fun AboutTopAppBar(navController: NavController) {
     )
 }
 
+/**
+ * Stateless layout for the About screen.
+ *
+ * Renders the [AppHeroSection] (app icon, name, version badge, description) followed by two
+ * [AboutSectionCard]s — one for the developer and one for the contributor list. The developer
+ * shown in the first card is resolved from [contributorsState] when a [ContributorsUiState.Success]
+ * is available, falling back to [developerFallback] during loading or on error.
+ *
+ * @param modifier Applied to the root [Column]; should include `fillMaxSize` and inset padding.
+ * @param contributorsState The current fetch state forwarded from [AboutViewModel.contributorsState].
+ * @param developerFallback A pre-built [Contributor] displayed while the API response is pending.
+ * @param onRetry Called when the user taps "Retry" after a failed fetch.
+ */
 @Composable
 private fun AboutContent(
     modifier: Modifier = Modifier,
@@ -139,6 +170,12 @@ private fun AboutContent(
     }
 }
 
+/**
+ * Centred hero section displayed at the top of the About screen.
+ *
+ * Shows the launcher icon (loaded via [PackageManager] to correctly render adaptive icons on
+ * API 26+), the app name, a pill-shaped version badge, and the app description.
+ */
 @Composable
 private fun AppHeroSection() {
     val context = LocalContext.current
@@ -182,6 +219,17 @@ private fun AppHeroSection() {
     }
 }
 
+/**
+ * A reusable [ElevatedCard] with a labelled header row and an arbitrary [content] slot.
+ *
+ * The header row shows a tinted [icon] and a [label] in the theme's primary colour, separated
+ * from [content] by a [HorizontalDivider]. This component is used for both the "Created by" and
+ * "Contributors" sections so the two cards share a consistent visual treatment.
+ *
+ * @param label Text displayed in the card header (e.g. "Created by", "Contributors").
+ * @param icon Icon displayed beside the label in the card header.
+ * @param content The body content rendered below the divider, scoped to [ColumnScope].
+ */
 @Composable
 private fun AboutSectionCard(
     label: String,
@@ -211,6 +259,14 @@ private fun AboutSectionCard(
     }
 }
 
+/**
+ * A full-width, clickable row displaying a single [Contributor]'s avatar, name, and a trailing
+ * chevron indicating that the row opens an external link.
+ *
+ * Tapping the row launches the contributor's GitHub profile URL in the system browser.
+ *
+ * @param contributor The contributor whose data is rendered in this row.
+ */
 @Composable
 private fun ContributorRow(contributor: Contributor) {
     val context = LocalContext.current
@@ -246,6 +302,18 @@ private fun ContributorRow(contributor: Contributor) {
     }
 }
 
+/**
+ * Renders the body of the contributors card based on the current [ContributorsUiState].
+ *
+ * - [ContributorsUiState.Loading] → [ContributorsLoading] (spinner + label).
+ * - [ContributorsUiState.Error] → [ContributorsError] (message + retry button).
+ * - [ContributorsUiState.Success] with an empty list → an empty-state message.
+ * - [ContributorsUiState.Success] with contributors → a [ContributorRow] per entry, separated by
+ *   inset [HorizontalDivider]s.
+ *
+ * @param state The current fetch state from [AboutViewModel.contributorsState].
+ * @param onRetry Forwarded to [ContributorsError] as the retry callback.
+ */
 @Composable
 private fun ContributorsList(
     state: ContributorsUiState,
@@ -280,6 +348,11 @@ private fun ContributorsList(
     }
 }
 
+/**
+ * Inline loading indicator shown inside the contributors card while the API request is in flight.
+ *
+ * Displays a small [CircularProgressIndicator] alongside a descriptive text label.
+ */
 @Composable
 private fun ContributorsLoading() {
     Box(
@@ -305,6 +378,14 @@ private fun ContributorsLoading() {
     }
 }
 
+/**
+ * Error state shown inside the contributors card when the API request fails.
+ *
+ * Displays a short error message and an [OutlinedButton] that triggers [onRetry], which calls
+ * [AboutViewModel.loadContributors] with `forceRefresh = true`.
+ *
+ * @param onRetry Called when the user taps the retry button.
+ */
 @Composable
 private fun ContributorsError(onRetry: () -> Unit) {
     Column(
