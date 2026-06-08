@@ -14,6 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
 import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_DELAY_MS
@@ -49,14 +52,17 @@ internal fun HandleCenterMapEvent(
     centerMapEvent: Flow<Unit>
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val userLocationNotAvailable = stringResource(R.string.toast_user_location_not_available)
-    LaunchedEffect(Unit) {
-        centerMapEvent.collect {
-            val userLocation = locationOverlay.myLocation
-            if (userLocation != null) {
-                mapView.controller.animateTo(userLocation)
-            } else {
-                Toast.makeText(context, userLocationNotAvailable, Toast.LENGTH_SHORT).show()
+    LaunchedEffect(lifecycleOwner, centerMapEvent) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            centerMapEvent.collect {
+                val userLocation = locationOverlay.myLocation
+                if (userLocation != null) {
+                    mapView.controller.animateTo(userLocation)
+                } else {
+                    Toast.makeText(context, userLocationNotAvailable, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -68,10 +74,13 @@ internal fun HandleGoToPointEvent(
     goToPointEvent: Flow<GeoPoint>,
     onClickedLocationChange: (GeoPoint?) -> Unit
 ) {
-    LaunchedEffect(Unit) {
-        goToPointEvent.collect { geoPoint ->
-            mapView.controller.animateTo(geoPoint)
-            onClickedLocationChange(geoPoint)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, goToPointEvent) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            goToPointEvent.collect { geoPoint ->
+                mapView.controller.animateTo(geoPoint)
+                onClickedLocationChange(geoPoint)
+            }
         }
     }
 }
