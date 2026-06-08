@@ -34,23 +34,11 @@ data class TargetAppsUiState(
     val selectedPackages: Set<String> = emptySet(),
     val pendingPackages: Set<String> = emptySet(),
     val relaunchingPackages: Set<String> = emptySet(),
+    val filteredApps: List<TargetAppItem> = emptyList(),
     val searchQuery: String = "",
     val isLoading: Boolean = true,
     val isModuleActive: Boolean = true
-) {
-    val filteredApps: List<TargetAppItem>
-        get() {
-            val query = searchQuery.trim()
-            return if (query.isEmpty()) {
-                apps
-            } else {
-                apps.filter {
-                    it.label.contains(query, ignoreCase = true) ||
-                        it.packageName.contains(query, ignoreCase = true)
-                }
-            }
-        }
-}
+)
 
 /** One-shot messages surfaced to the UI (e.g. as a snackbar). */
 sealed interface TargetAppsEvent {
@@ -85,7 +73,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+        _uiState.update { it.copy(searchQuery = query).recompute() }
     }
 
     fun toggleApp(packageName: String) {
@@ -205,9 +193,8 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
                         state.copy(
                             isModuleActive = false,
                             selectedPackages = emptySet(),
-                            pendingPackages = emptySet(),
-                            apps = state.apps.map { it.copy(isSelected = false, isPending = false) }
-                        )
+                            pendingPackages = emptySet()
+                        ).recompute()
                     }
                 } else {
                     _uiState.update { it.copy(isModuleActive = true) }
@@ -230,10 +217,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         _uiState.update { state ->
-            state.copy(
-                selectedPackages = scope,
-                apps = state.apps.map { it.copy(isSelected = scope.contains(it.packageName)) }
-            )
+            state.copy(selectedPackages = scope).recompute()
         }
 
         preferencesRepository.saveTargetApps(scope)
@@ -244,12 +228,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             val nextPending = state.pendingPackages.toMutableSet().apply {
                 if (pending) add(packageName) else remove(packageName)
             }
-            state.copy(
-                pendingPackages = nextPending,
-                apps = state.apps.map {
-                    if (it.packageName == packageName) it.copy(isPending = pending) else it
-                }
-            )
+            state.copy(pendingPackages = nextPending).recompute()
         }
     }
 
@@ -258,13 +237,30 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             val nextRelaunching = state.relaunchingPackages.toMutableSet().apply {
                 if (relaunching) add(packageName) else remove(packageName)
             }
-            state.copy(
-                relaunchingPackages = nextRelaunching,
-                apps = state.apps.map {
-                    if (it.packageName == packageName) it.copy(isRelaunching = relaunching) else it
-                }
-            )
+            state.copy(relaunchingPackages = nextRelaunching).recompute()
         }
+    }
+
+    /**
+     * Derives [TargetAppsUiState.filteredApps] from the current [TargetAppsUiState.apps],
+     * the three package sets, and [TargetAppsUiState.searchQuery]. Call at the end of
+     * every [_uiState] update that changes any of those five fields.
+     */
+    private fun TargetAppsUiState.recompute(): TargetAppsUiState {
+        val query = searchQuery.trim()
+        val source = if (query.isEmpty()) apps else apps.filter {
+            it.label.contains(query, ignoreCase = true) ||
+                it.packageName.contains(query, ignoreCase = true)
+        }
+        return copy(
+            filteredApps = source.map { app ->
+                app.copy(
+                    isSelected = selectedPackages.contains(app.packageName),
+                    isPending = pendingPackages.contains(app.packageName),
+                    isRelaunching = relaunchingPackages.contains(app.packageName)
+                )
+            }
+        )
     }
 
     private fun loadInstalledApps() {
@@ -287,16 +283,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             }
 
             _uiState.update { state ->
-                state.copy(
-                    apps = installedApps.map {
-                        it.copy(
-                            isSelected = state.selectedPackages.contains(it.packageName),
-                            isPending = state.pendingPackages.contains(it.packageName),
-                            isRelaunching = state.relaunchingPackages.contains(it.packageName)
-                        )
-                    },
-                    isLoading = false
-                )
+                state.copy(apps = installedApps, isLoading = false).recompute()
             }
         }
     }
