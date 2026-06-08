@@ -61,7 +61,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TargetAppsScreen(
     navController: NavController,
@@ -92,6 +91,26 @@ fun TargetAppsScreen(
         }
     }
 
+    TargetAppsContent(
+        uiState = uiState,
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = { navController.navigateUp() },
+        onSearchQueryChange = viewModel::updateSearchQuery,
+        onToggle = viewModel::toggleApp,
+        onRelaunch = viewModel::relaunchApp,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TargetAppsContent(
+    uiState: TargetAppsUiState,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onToggle: (String) -> Unit,
+    onRelaunch: (String) -> Unit,
+) {
     Scaffold(
         snackbarHost = {
             SnackbarHost(
@@ -105,10 +124,11 @@ fun TargetAppsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
+                    IconButton(onClick = onNavigateUp) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.cd_navigate_back)
@@ -128,7 +148,7 @@ fun TargetAppsScreen(
 
             OutlinedTextField(
                 value = uiState.searchQuery,
-                onValueChange = viewModel::updateSearchQuery,
+                onValueChange = onSearchQueryChange,
                 label = { Text(stringResource(R.string.target_apps_search_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -166,8 +186,8 @@ fun TargetAppsScreen(
                     items(uiState.filteredApps, key = { it.packageName }) { app ->
                         TargetAppRow(
                             app = app,
-                            onToggle = { viewModel.toggleApp(app.packageName) },
-                            onRelaunch = { viewModel.relaunchApp(app.packageName) }
+                            onToggle = { onToggle(app.packageName) },
+                            onRelaunch = { onRelaunch(app.packageName) }
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     }
