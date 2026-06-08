@@ -225,6 +225,22 @@ private fun TargetAppsContent(
                     }
                 },
                 actions = {
+                    if (searchActive) {
+                        IconButton(onClick = {
+                            if (uiState.searchQuery.isEmpty()) {
+                                searchActive = false
+                                focusManager.clearFocus()
+                            } else {
+                                onSearchQueryChange("")
+                            }
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
+                        }
+                    } else {
+                        IconButton(onClick = { searchActive = true }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search_apps))
+                        }
+                    }
                     Box {
                         IconButton(onClick = { filterExpanded = true }) {
                             Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.cd_filter_apps))
@@ -253,22 +269,6 @@ private fun TargetAppsContent(
                                     )
                                 }
                             )
-                        }
-                    }
-                    if (searchActive) {
-                        IconButton(onClick = {
-                            if (uiState.searchQuery.isEmpty()) {
-                                searchActive = false
-                                focusManager.clearFocus()
-                            } else {
-                                onSearchQueryChange("")
-                            }
-                        }) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
-                        }
-                    } else {
-                        IconButton(onClick = { searchActive = true }) {
-                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search_apps))
                         }
                     }
                 }

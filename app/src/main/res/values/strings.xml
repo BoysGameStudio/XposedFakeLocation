@@ -161,7 +161,7 @@
     <string name="template_advanced_description">Override the current global settings before saving this template</string>
 
     <string name="favorites_empty">No favorites added.</string>
-    <string name="target_apps_search_label">Search apps or package names</string>
+    <string name="target_apps_search_label">Search apps or packages</string>
     <string name="target_apps_no_results">No apps match \"%1$s\"</string>
     <string name="target_apps_filter_user">User apps</string>
     <string name="target_apps_filter_system">System apps</string>
