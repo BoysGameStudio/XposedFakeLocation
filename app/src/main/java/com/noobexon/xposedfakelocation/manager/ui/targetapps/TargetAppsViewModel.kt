@@ -10,12 +10,12 @@ import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
 import com.noobexon.xposedfakelocation.manager.App
 import io.github.libxposed.service.XposedService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -76,8 +76,8 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
     private val _uiState = MutableStateFlow(TargetAppsUiState())
     val uiState: StateFlow<TargetAppsUiState> = _uiState.asStateFlow()
 
-    private val _events = MutableSharedFlow<TargetAppsEvent>(extraBufferCapacity = 1)
-    val events: SharedFlow<TargetAppsEvent> = _events.asSharedFlow()
+    private val _events = Channel<TargetAppsEvent>(Channel.BUFFERED)
+    val events: Flow<TargetAppsEvent> = _events.receiveAsFlow()
 
     init {
         loadInstalledApps()
@@ -93,7 +93,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
 
         val service = App.service
         if (service == null) {
-            _events.tryEmit(TargetAppsEvent.ModuleNotActive)
+            _events.trySend(TargetAppsEvent.ModuleNotActive)
             return
         }
 
@@ -119,14 +119,14 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             val hasRoot = withContext(Dispatchers.IO) { hasRootAccess() }
             if (!hasRoot) {
                 setRelaunching(packageName, false)
-                _events.tryEmit(TargetAppsEvent.RootRequired)
+                _events.trySend(TargetAppsEvent.RootRequired)
                 return@launch
             }
 
             val killed = withContext(Dispatchers.IO) { runAsRoot("am force-stop $packageName") }
             if (!killed) {
                 setRelaunching(packageName, false)
-                _events.tryEmit(TargetAppsEvent.RelaunchFailed(label))
+                _events.trySend(TargetAppsEvent.RelaunchFailed(label))
                 return@launch
             }
 
@@ -135,9 +135,9 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             setRelaunching(packageName, false)
             if (launchIntent != null) {
                 getApplication<Application>().startActivity(launchIntent)
-                _events.tryEmit(TargetAppsEvent.Relaunched(label))
+                _events.trySend(TargetAppsEvent.Relaunched(label))
             } else {
-                _events.tryEmit(TargetAppsEvent.RelaunchFailed(label))
+                _events.trySend(TargetAppsEvent.RelaunchFailed(label))
             }
         }
     }
@@ -171,7 +171,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             override fun onScopeRequestFailed(message: String) {
                 viewModelScope.launch {
                     setPending(packageName, false)
-                    _events.tryEmit(TargetAppsEvent.ScopeRequestFailed(message))
+                    _events.trySend(TargetAppsEvent.ScopeRequestFailed(message))
                 }
             }
         }
@@ -181,7 +181,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
                 withContext(Dispatchers.IO) { service.requestScope(listOf(packageName), callback) }
             } catch (e: XposedService.ServiceException) {
                 setPending(packageName, false)
-                _events.tryEmit(TargetAppsEvent.ScopeRequestFailed(e.message ?: e.toString()))
+                _events.trySend(TargetAppsEvent.ScopeRequestFailed(e.message ?: e.toString()))
             }
         }
     }
@@ -191,7 +191,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 withContext(Dispatchers.IO) { service.removeScope(listOf(packageName)) }
             } catch (e: XposedService.ServiceException) {
-                _events.tryEmit(TargetAppsEvent.ScopeRequestFailed(e.message ?: e.toString()))
+                _events.trySend(TargetAppsEvent.ScopeRequestFailed(e.message ?: e.toString()))
             }
             refreshScope()
         }
@@ -224,7 +224,7 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 service.scope.toSet()
             } catch (e: XposedService.ServiceException) {
-                _events.tryEmit(TargetAppsEvent.ScopeRequestFailed(e.message ?: e.toString()))
+                _events.trySend(TargetAppsEvent.ScopeRequestFailed(e.message ?: e.toString()))
                 _uiState.value.selectedPackages
             }
         }
