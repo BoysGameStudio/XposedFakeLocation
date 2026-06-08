@@ -3,35 +3,47 @@ package com.noobexon.xposedfakelocation.manager.ui.about
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,18 +67,14 @@ fun AboutScreen(
     Scaffold(
         topBar = { AboutTopAppBar(navController) }
     ) { innerPadding ->
-        Box(
+        AboutContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentAlignment = Alignment.Center
-        ) {
-            AboutContent(
-                contributorsState = contributorsState,
-                developerFallback = viewModel.developerFallback,
-                onRetry = { viewModel.loadContributors(forceRefresh = true) },
-            )
-        }
+            contributorsState = contributorsState,
+            developerFallback = viewModel.developerFallback,
+            onRetry = { viewModel.loadContributors(forceRefresh = true) },
+        )
     }
 }
 
@@ -94,152 +102,112 @@ private fun AboutTopAppBar(navController: NavController) {
 
 @Composable
 private fun AboutContent(
+    modifier: Modifier = Modifier,
     contributorsState: ContributorsUiState,
     developerFallback: Contributor,
     onRetry: () -> Unit,
 ) {
+    val developer = (contributorsState as? ContributorsUiState.Success)?.developer
+        ?: developerFallback
+
     Column(
-        modifier = Modifier
+        modifier = modifier
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 16.dp)
+            .padding(top = 24.dp, bottom = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        AppTitle()
-        Spacer(modifier = Modifier.height(16.dp))
-        AppDescription()
-        Spacer(modifier = Modifier.height(32.dp))
-        AppVersionSection()
-        Spacer(modifier = Modifier.height(16.dp))
-        AppDeveloperSection(
-            developer = (contributorsState as? ContributorsUiState.Success)?.developer
-                ?: developerFallback
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        AppContributorsSection(
-            state = contributorsState,
-            onRetry = onRetry,
-        )
-    }
-}
+        AppHeroSection()
 
-@Composable
-private fun AppTitle() {
-    Text(
-        text = stringResource(R.string.app_name),
-        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-        textAlign = TextAlign.Center
-    )
-}
+        AboutSectionCard(
+            label = stringResource(R.string.about_developer_label),
+            icon = Icons.Outlined.Person,
+        ) {
+            ContributorRow(developer)
+        }
 
-@Composable
-private fun AppDescription() {
-    Text(
-        text = stringResource(R.string.about_description),
-        style = MaterialTheme.typography.bodyLarge,
-        textAlign = TextAlign.Center
-    )
-}
-
-@Composable
-private fun AppVersionSection() {
-    AppVersionTitle()
-    Spacer(modifier = Modifier.height(16.dp))
-    AppVersionValue()
-}
-
-@Composable
-private fun AppVersionTitle() {
-    Text(
-        text = stringResource(R.string.about_version_label),
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 24.dp)
-    )
-}
-
-@Composable
-private fun AppVersionValue() {
-    Text(
-        text = BuildConfig.VERSION_NAME,
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 4.dp)
-    )
-}
-
-@Composable
-private fun AppDeveloperSection(developer: Contributor) {
-    AppDeveloperTitle()
-    Spacer(modifier = Modifier.height(16.dp))
-    ContributorRow(developer)
-}
-
-@Composable
-private fun AppDeveloperTitle() {
-    Text(
-        text = stringResource(R.string.about_developer_label),
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 8.dp)
-    )
-}
-
-@Composable
-private fun AppContributorsSection(
-    state: ContributorsUiState,
-    onRetry: () -> Unit,
-) {
-    Text(
-        text = stringResource(R.string.about_contributors_label),
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 8.dp)
-    )
-    Spacer(modifier = Modifier.height(16.dp))
-
-    when (val current = state) {
-        is ContributorsUiState.Loading -> ContributorsLoading()
-        is ContributorsUiState.Error -> ContributorsError(onRetry = onRetry)
-        is ContributorsUiState.Success -> {
-            if (current.contributors.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.about_contributors_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
-                )
-            } else {
-                current.contributors.forEach { contributor ->
-                    ContributorRow(contributor)
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
+        AboutSectionCard(
+            label = stringResource(R.string.about_contributors_label),
+            icon = Icons.Outlined.Group,
+        ) {
+            ContributorsList(
+                state = contributorsState,
+                onRetry = onRetry,
+            )
         }
     }
 }
 
 @Composable
-private fun ContributorsLoading() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = stringResource(R.string.about_contributors_loading),
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
-}
+private fun AppHeroSection() {
+    val context = LocalContext.current
+    val appIcon = remember { context.packageManager.getApplicationIcon(context.packageName) }
 
-@Composable
-private fun ContributorsError(onRetry: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        AsyncImage(
+            model = appIcon,
+            contentDescription = null,
+            modifier = Modifier
+                .size(88.dp)
+                .clip(RoundedCornerShape(20.dp))
+        )
         Text(
-            text = stringResource(R.string.about_contributors_error),
-            style = MaterialTheme.typography.bodyMedium,
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             textAlign = TextAlign.Center
         )
-        TextButton(onClick = onRetry) {
-            Text(text = stringResource(R.string.about_contributors_retry))
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = CircleShape
+        ) {
+            Text(
+                text = "v${BuildConfig.VERSION_NAME}",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.about_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun AboutSectionCard(
+    label: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        HorizontalDivider()
+        content()
     }
 }
 
@@ -247,13 +215,15 @@ private fun ContributorsError(onRetry: () -> Unit) {
 private fun ContributorRow(contributor: Contributor) {
     val context = LocalContext.current
     Row(
-        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .padding(vertical = 4.dp)
+            .fillMaxWidth()
             .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(contributor.githubUrl))
-                context.startActivity(intent)
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(contributor.githubUrl))
+                )
             }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
             model = contributor.avatarUrl,
@@ -262,13 +232,96 @@ private fun ContributorRow(contributor: Contributor) {
                 .size(40.dp)
                 .clip(CircleShape)
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
             text = contributor.name,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.weight(1f)
         )
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun ContributorsList(
+    state: ContributorsUiState,
+    onRetry: () -> Unit,
+) {
+    when (val current = state) {
+        is ContributorsUiState.Loading -> ContributorsLoading()
+        is ContributorsUiState.Error -> ContributorsError(onRetry = onRetry)
+        is ContributorsUiState.Success -> {
+            if (current.contributors.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.about_contributors_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                current.contributors.forEachIndexed { index, contributor ->
+                    if (index > 0) {
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    }
+                    ContributorRow(contributor)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContributorsLoading() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp
+            )
+            Text(
+                text = stringResource(R.string.about_contributors_loading),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContributorsError(onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.about_contributors_error),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        OutlinedButton(onClick = onRetry) {
+            Text(text = stringResource(R.string.about_contributors_retry))
+        }
     }
 }
