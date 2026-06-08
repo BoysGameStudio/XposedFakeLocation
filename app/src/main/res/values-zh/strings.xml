@@ -161,6 +161,9 @@
     <string name="favorites_empty">还没有添加收藏。</string>
     <string name="target_apps_search_label">搜索应用或包名</string>
     <string name="target_apps_no_results">没有与「%1$s」匹配的应用</string>
+    <string name="target_apps_filter_user">用户应用</string>
+    <string name="target_apps_filter_system">系统应用</string>
+    <string name="cd_filter_apps">筛选应用</string>
     <string name="target_apps_selected_count">已选择 %1$d 个</string>
     <string name="target_apps_module_inactive">模块未激活。请在 Xposed 管理器中启用 XposedFakeLocation 以选择目标应用。</string>
     <string name="target_apps_scope_request_failed">无法更新作用域：%1$s</string>

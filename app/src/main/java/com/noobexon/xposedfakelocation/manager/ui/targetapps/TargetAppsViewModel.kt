@@ -2,6 +2,7 @@ package com.noobexon.xposedfakelocation.manager.ui.targetapps
 
 import android.app.Application
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
@@ -25,6 +26,7 @@ import kotlinx.coroutines.withContext
 data class TargetAppItem(
     val label: String,
     val packageName: String,
+    val isSystemApp: Boolean = false,
     val isSelected: Boolean = false,
     val isPending: Boolean = false,
     val isRelaunching: Boolean = false
@@ -38,6 +40,8 @@ data class TargetAppsUiState(
     val relaunchingPackages: Set<String> = emptySet(),
     val filteredApps: List<TargetAppItem> = emptyList(),
     val searchQuery: String = "",
+    val showUserApps: Boolean = true,
+    val showSystemApps: Boolean = true,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val isModuleActive: Boolean = true
@@ -83,6 +87,14 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
 
     fun updateSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query).recompute() }
+    }
+
+    fun setShowUserApps(show: Boolean) {
+        _uiState.update { it.copy(showUserApps = show).recompute() }
+    }
+
+    fun setShowSystemApps(show: Boolean) {
+        _uiState.update { it.copy(showSystemApps = show).recompute() }
     }
 
     fun toggleApp(packageName: String) {
@@ -267,7 +279,8 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
      */
     private fun TargetAppsUiState.recompute(): TargetAppsUiState {
         val query = searchQuery.trim()
-        val source = if (query.isEmpty()) apps else apps.filter {
+        val typeFiltered = apps.filter { if (it.isSystemApp) showSystemApps else showUserApps }
+        val source = if (query.isEmpty()) typeFiltered else typeFiltered.filter {
             it.label.contains(query, ignoreCase = true) ||
                 it.packageName.contains(query, ignoreCase = true)
         }
@@ -289,7 +302,13 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
             .map { it.activityInfo.applicationInfo }
             .filter { it.packageName != MANAGER_APP_PACKAGE_NAME }
             .distinctBy { it.packageName }
-            .map { TargetAppItem(label = it.loadLabel(packageManager).toString(), packageName = it.packageName) }
+            .map {
+                TargetAppItem(
+                    label = it.loadLabel(packageManager).toString(),
+                    packageName = it.packageName,
+                    isSystemApp = (it.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                )
+            }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
             .toList()
     }

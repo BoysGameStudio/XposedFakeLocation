@@ -24,9 +24,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -117,6 +120,8 @@ fun TargetAppsScreen(
         onToggle = viewModel::toggleApp,
         onRelaunch = viewModel::relaunchApp,
         onRefresh = viewModel::refresh,
+        onSetShowUserApps = viewModel::setShowUserApps,
+        onSetShowSystemApps = viewModel::setShowSystemApps,
     )
 }
 
@@ -130,8 +135,11 @@ private fun TargetAppsContent(
     onToggle: (String) -> Unit,
     onRelaunch: (String) -> Unit,
     onRefresh: () -> Unit,
+    onSetShowUserApps: (Boolean) -> Unit,
+    onSetShowSystemApps: (Boolean) -> Unit,
 ) {
     var searchActive by remember { mutableStateOf(false) }
+    var filterExpanded by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     val pullRefreshState = rememberPullToRefreshState()
@@ -217,6 +225,36 @@ private fun TargetAppsContent(
                     }
                 },
                 actions = {
+                    Box {
+                        IconButton(onClick = { filterExpanded = true }) {
+                            Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.cd_filter_apps))
+                        }
+                        DropdownMenu(
+                            expanded = filterExpanded,
+                            onDismissRequest = { filterExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.target_apps_filter_user)) },
+                                onClick = { onSetShowUserApps(!uiState.showUserApps) },
+                                leadingIcon = {
+                                    Checkbox(
+                                        checked = uiState.showUserApps,
+                                        onCheckedChange = null
+                                    )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.target_apps_filter_system)) },
+                                onClick = { onSetShowSystemApps(!uiState.showSystemApps) },
+                                leadingIcon = {
+                                    Checkbox(
+                                        checked = uiState.showSystemApps,
+                                        onCheckedChange = null
+                                    )
+                                }
+                            )
+                        }
+                    }
                     if (searchActive) {
                         IconButton(onClick = {
                             if (uiState.searchQuery.isEmpty()) {
