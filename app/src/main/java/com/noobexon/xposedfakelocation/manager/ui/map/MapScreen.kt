@@ -55,8 +55,8 @@ import kotlinx.coroutines.launch
  * - Collects [MapViewModel.uiState] and distributes individual slices to child composables so that
  *   only the composables that actually care about a piece of state recompose when it changes.
  * - Hosts the [ModalNavigationDrawer] and manages its [drawerState], including intercepting the
- *   system back gesture when the drawer is open and re-opening it on re-entry via
- *   [MapViewModel.consumeReopenDrawerRequest].
+ *   system back gesture when the drawer is open, closing on scrim tap (via `gesturesEnabled =
+ *   drawerState.isOpen`), and re-opening it on re-entry via [MapViewModel.consumeReopenDrawerRequest].
  * - Renders the [Scaffold] with [TopAppBar] (menu, center, overflow actions) and FAB
  *   (play/stop spoofing toggle). The FAB is visually disabled when no marker has been placed.
  * - Conditionally overlays [GoToPointDialog] and [AddToFavoritesDialog] based on the corresponding
@@ -106,7 +106,9 @@ fun MapScreen(
         },
         scrimColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
         drawerState = drawerState,
-        gesturesEnabled = false,
+        // Only enable gestures while the drawer is open so that tapping the scrim (outside the
+        // drawer) closes it. When closed, gestures are off so map pan/zoom is not intercepted.
+        gesturesEnabled = drawerState.isOpen,
         modifier = Modifier.fillMaxSize()
     ) {
         Scaffold(
