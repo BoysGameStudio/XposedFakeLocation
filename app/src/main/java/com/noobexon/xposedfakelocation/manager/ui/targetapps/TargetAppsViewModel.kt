@@ -195,7 +195,8 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
                         state.copy(
                             isModuleActive = false,
                             selectedPackages = emptySet(),
-                            pendingPackages = emptySet()
+                            pendingPackages = emptySet(),
+                            relaunchingPackages = emptySet()
                         ).recompute()
                     }
                 } else {
