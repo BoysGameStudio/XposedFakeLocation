@@ -15,7 +15,7 @@ import kotlin.math.round
 
 /**
  * Visual grouping and display order for the settings screen (top to bottom). Spoofing categories
- * come first, followed by behavioural and app-level preferences.
+ * come first, followed by behavioral and app-level preferences.
  *
  * @property titleRes String resource for the uppercase section header rendered above each card.
  */
