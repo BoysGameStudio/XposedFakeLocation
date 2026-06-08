@@ -81,12 +81,13 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(mapZoom = zoom) }
     }
 
-    fun setLoadingStarted() {
-        _uiState.update { it.copy(isLoading = true) }
-    }
-
     fun setLoadingFinished() {
         _uiState.update { it.copy(isLoading = false) }
+    }
+
+    /** Marks that the one-time initial camera positioning has completed. */
+    fun markInitialLocationResolved() {
+        _uiState.update { it.copy(hasResolvedInitialLocation = true) }
     }
 
     fun triggerCenterMapEvent() {

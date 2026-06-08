@@ -215,15 +215,17 @@ fun MapScreen(
                 MapViewContainer(
                     isLoading = uiState.isLoading,
                     lastClickedLocation = uiState.lastClickedLocation,
+                    userLocation = uiState.userLocation,
                     isPlaying = uiState.isPlaying,
                     mapZoom = uiState.mapZoom,
+                    hasResolvedInitialLocation = uiState.hasResolvedInitialLocation,
                     goToPointEvent = mapViewModel.goToPointEvent,
                     centerMapEvent = mapViewModel.centerMapEvent,
                     onClickedLocationChange = mapViewModel::updateClickedLocation,
                     onUserLocationChange = mapViewModel::updateUserLocation,
                     onMapZoomChange = mapViewModel::updateMapZoom,
-                    onLoadingStarted = mapViewModel::setLoadingStarted,
                     onLoadingFinished = mapViewModel::setLoadingFinished,
+                    onInitialLocationResolved = mapViewModel::markInitialLocationResolved,
                 )
             }
         }

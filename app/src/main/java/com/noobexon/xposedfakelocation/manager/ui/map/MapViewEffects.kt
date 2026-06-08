@@ -9,6 +9,8 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
@@ -17,8 +19,10 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
 import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_DELAY_MS
 import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_MAX_ATTEMPTS
 import com.noobexon.xposedfakelocation.data.WORLD_MAP_ZOOM
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -126,28 +130,63 @@ internal fun SetupMapClickListener(
     }
 }
 
+/**
+ * Positions the camera once per [mapView].
+ *
+ * - **First ever load** ([hasResolvedInitialLocation] == false): resolves an initial target — saved
+ *   marker, else last-known device location, else a short GPS poll, else a world-view fallback —
+ *   clearing the loading state when done and reporting completion via [onInitialLocationResolved].
+ * - **Re-entry** ([hasResolvedInitialLocation] == true): restores the last camera instantly with no
+ *   spinner and no detection. The remembered [mapZoom] is re-applied; for the no-marker case the
+ *   last [userLocation] is re-centered. Marker centering is left to [HandleMarkerUpdates].
+ *
+ * Either way, once positioned it never re-centers again for this [mapView], so later marker changes
+ * (taps, go-to-point, clear) don't reset the zoom. The effect is keyed on [lastClickedLocation] so
+ * an asynchronously-loaded saved marker can supersede an in-flight device-location lookup.
+ */
 @Composable
 internal fun CenterMapOnUserLocation(
     mapView: MapView,
     locationOverlay: MyLocationNewOverlay,
     lastClickedLocation: GeoPoint?,
+    userLocation: GeoPoint?,
     mapZoom: Double?,
+    hasResolvedInitialLocation: Boolean,
     onUserLocationChange: (GeoPoint) -> Unit,
     onMapZoomChange: (Double) -> Unit,
-    onLoadingFinished: () -> Unit
+    onLoadingFinished: () -> Unit,
+    onInitialLocationResolved: () -> Unit,
 ) {
     val context = LocalContext.current
+    val centeredOnce = remember(mapView) { mutableStateOf(false) }
     LaunchedEffect(mapView, lastClickedLocation) {
+        if (centeredOnce.value) return@LaunchedEffect
+
+        if (hasResolvedInitialLocation) {
+            // Re-entry: restore the last camera without re-detecting or showing a spinner.
+            mapView.controller.setZoom(mapZoom ?: DEFAULT_MAP_ZOOM)
+            if (lastClickedLocation == null && userLocation != null) {
+                mapView.controller.setCenter(userLocation)
+            }
+            centeredOnce.value = true
+            return@LaunchedEffect
+        }
+
         if (lastClickedLocation != null) {
             centerOnMarkerLocation(mapView, lastClickedLocation, mapZoom, onMapZoomChange, onLoadingFinished)
         } else {
             val lastKnown = getLastKnownDeviceLocation(context)
             if (lastKnown != null) {
                 centerOnGeoPoint(mapView, lastKnown, onUserLocationChange, onMapZoomChange, onLoadingFinished)
-            } else if (!tryToFindAndCenterUserLocation(mapView, locationOverlay, onUserLocationChange, onMapZoomChange, onLoadingFinished)) {
-                centerOnDefaultLocation(mapView, onMapZoomChange, onLoadingFinished)
+            } else {
+                val found = tryToFindAndCenterUserLocation(mapView, locationOverlay, onUserLocationChange, onMapZoomChange, onLoadingFinished)
+                if (!found) {
+                    centerOnDefaultLocation(mapView, onMapZoomChange, onLoadingFinished)
+                }
             }
         }
+        onInitialLocationResolved()
+        centeredOnce.value = true
     }
 }
 
@@ -182,20 +221,21 @@ private fun centerOnGeoPoint(
     onLoadingFinished()
 }
 
-private fun getLastKnownDeviceLocation(context: Context): GeoPoint? {
+private suspend fun getLastKnownDeviceLocation(context: Context): GeoPoint? = withContext(Dispatchers.IO) {
     val granted = ContextCompat.checkSelfPermission(
         context, Manifest.permission.ACCESS_FINE_LOCATION
     ) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-    if (!granted) return null
+    if (!granted) return@withContext null
 
-    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        ?: return@withContext null
     val providers = try {
         lm.getProviders(true)
     } catch (e: SecurityException) {
-        return null
+        return@withContext null
     }
     var best: Location? = null
     for (provider in providers) {
@@ -206,7 +246,7 @@ private fun getLastKnownDeviceLocation(context: Context): GeoPoint? {
         } ?: continue
         if (best == null || loc.time > best.time) best = loc
     }
-    return best?.let { GeoPoint(it.latitude, it.longitude) }
+    best?.let { GeoPoint(it.latitude, it.longitude) }
 }
 
 /**
@@ -254,8 +294,7 @@ private fun centerOnDefaultLocation(
 @Composable
 internal fun ManageMapViewLifecycle(
     mapView: MapView,
-    locationOverlay: MyLocationNewOverlay,
-    onLoadingStarted: () -> Unit
+    locationOverlay: MyLocationNewOverlay
 ) {
     DisposableEffect(Unit) {
         mapView.onResume()
@@ -265,7 +304,6 @@ internal fun ManageMapViewLifecycle(
             mapView.overlays.clear()
             mapView.onPause()
             mapView.onDetach()
-            onLoadingStarted()
         }
     }
 }

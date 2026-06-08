@@ -44,6 +44,9 @@ data class FavoritesInputState(
  * @property addToFavoritesState Input/validation state for the "Add to favorites" dialog.
  * @property isAddToFavoritesDialogVisible Whether the "Add to favorites" dialog is shown.
  * @property goToPointState Input/validation state for the "Go to point" dialog.
+ * @property hasResolvedInitialLocation Whether the map has completed its one-time initial camera
+ *   positioning. Survives navigation so that re-entering the screen restores the last camera
+ *   position instead of re-running location detection.
  */
 @Immutable
 data class MapUiState(
@@ -56,6 +59,7 @@ data class MapUiState(
     val addToFavoritesState: FavoritesInputState = FavoritesInputState(),
     val isAddToFavoritesDialogVisible: Boolean = false,
     val goToPointState: GoToPointInputState = GoToPointInputState(),
+    val hasResolvedInitialLocation: Boolean = false,
 ) {
     val isFabClickable: Boolean
         get() = lastClickedLocation != null

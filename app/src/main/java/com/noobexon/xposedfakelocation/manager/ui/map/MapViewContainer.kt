@@ -36,15 +36,17 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 fun MapViewContainer(
     isLoading: Boolean,
     lastClickedLocation: GeoPoint?,
+    userLocation: GeoPoint?,
     isPlaying: Boolean,
     mapZoom: Double?,
+    hasResolvedInitialLocation: Boolean,
     goToPointEvent: Flow<GeoPoint>,
     centerMapEvent: Flow<Unit>,
     onClickedLocationChange: (GeoPoint?) -> Unit,
     onUserLocationChange: (GeoPoint) -> Unit,
     onMapZoomChange: (Double) -> Unit,
-    onLoadingStarted: () -> Unit,
     onLoadingFinished: () -> Unit,
+    onInitialLocationResolved: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -65,12 +67,15 @@ fun MapViewContainer(
         mapView = mapView,
         locationOverlay = locationOverlay,
         lastClickedLocation = lastClickedLocation,
+        userLocation = userLocation,
         mapZoom = mapZoom,
+        hasResolvedInitialLocation = hasResolvedInitialLocation,
         onUserLocationChange = onUserLocationChange,
         onMapZoomChange = onMapZoomChange,
-        onLoadingFinished = onLoadingFinished
+        onLoadingFinished = onLoadingFinished,
+        onInitialLocationResolved = onInitialLocationResolved,
     )
-    ManageMapViewLifecycle(mapView, locationOverlay, onLoadingStarted)
+    ManageMapViewLifecycle(mapView, locationOverlay)
 
     // Add MapListener to update zoom level
     DisposableEffect(mapView) {
