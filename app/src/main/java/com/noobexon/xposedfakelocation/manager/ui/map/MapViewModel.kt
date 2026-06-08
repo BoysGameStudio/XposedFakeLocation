@@ -309,6 +309,22 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Updates the optional description field of the "Add to favorites" dialog. No validation is
+     * applied — description is always optional and may be left blank.
+     *
+     * @param value The raw string typed by the user.
+     */
+    fun onFavoriteDescriptionChange(value: String) {
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    description = it.addToFavoritesState.description.copy(value = value)
+                )
+            )
+        }
+    }
+
+    /**
      * Updates the latitude field of the "Add to favorites" dialog with inline live validation.
      *
      * @param value The raw string typed by the user.
@@ -352,9 +368,10 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
         if (nameError == null && latitudeError == null && longitudeError == null) {
             val favorite = FavoriteLocation(
-                state.name.value,
-                state.latitude.value.toDouble(),
-                state.longitude.value.toDouble()
+                name = state.name.value,
+                latitude = state.latitude.value.toDouble(),
+                longitude = state.longitude.value.toDouble(),
+                description = state.description.value.trim(),
             )
             viewModelScope.launch {
                 preferencesRepository.addFavorite(favorite)

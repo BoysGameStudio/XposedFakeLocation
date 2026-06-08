@@ -92,16 +92,19 @@ fun GoToPointDialog(
  * needs to enter a name. All values and errors flow down from [MapUiState.addToFavoritesState];
  * all mutations are forwarded via callbacks.
  *
- * The name field performs live validation (error appears as soon as the field is cleared), while
- * the coordinate fields are validated only on confirmation.
+ * The name field performs live validation (error appears as soon as the field is cleared). The
+ * description field is optional and has no validation. Coordinate fields are validated only on
+ * confirmation.
  *
  * @param name Current text value of the name field.
+ * @param description Current text value of the optional description field.
  * @param latitude Current text value of the latitude field.
  * @param longitude Current text value of the longitude field.
  * @param nameErrorRes String resource for the name validation error, or `null` if valid.
  * @param latitudeErrorRes String resource for the latitude validation error, or `null` if valid.
  * @param longitudeErrorRes String resource for the longitude validation error, or `null` if valid.
  * @param onNameChange Called on every keystroke in the name field (with live validation).
+ * @param onDescriptionChange Called on every keystroke in the description field.
  * @param onLatitudeChange Called on every keystroke in the latitude field.
  * @param onLongitudeChange Called on every keystroke in the longitude field.
  * @param onConfirm Called when the user taps "Add"; triggers full validation in [MapViewModel].
@@ -110,12 +113,14 @@ fun GoToPointDialog(
 @Composable
 fun AddToFavoritesDialog(
     name: String,
+    description: String,
     latitude: String,
     longitude: String,
     @StringRes nameErrorRes: Int?,
     @StringRes latitudeErrorRes: Int?,
     @StringRes longitudeErrorRes: Int?,
     onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
     onLatitudeChange: (String) -> Unit,
     onLongitudeChange: (String) -> Unit,
     onConfirm: () -> Unit,
@@ -131,6 +136,13 @@ fun AddToFavoritesDialog(
                     onValueChange = onNameChange,
                     label = stringResource(R.string.field_name),
                     errorRes = nameErrorRes,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                CoordinateInputField(
+                    value = description,
+                    onValueChange = onDescriptionChange,
+                    label = stringResource(R.string.field_description),
+                    errorRes = null,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 CoordinateInputField(

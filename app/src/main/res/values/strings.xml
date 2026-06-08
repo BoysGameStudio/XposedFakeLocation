@@ -138,6 +138,7 @@
     <string name="map_updating">Updating Map…</string>
 
     <string name="field_name">Name</string>
+    <string name="field_description">Description (optional)</string>
     <string name="field_latitude">Latitude</string>
     <string name="field_longitude">Longitude</string>
     <string name="field_template">Template</string>

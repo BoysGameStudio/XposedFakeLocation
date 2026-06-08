@@ -50,7 +50,6 @@ import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 
-//TODO: continue this screen after we finish with the map and drawer
 
 @Composable
 fun FavoritesScreen(
@@ -216,6 +215,15 @@ private fun FavoriteItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (favorite.description.isNotBlank()) {
+                    Text(
+                        text = favorite.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
                     text = stringResource(
                         R.string.coordinates_lat_lon,

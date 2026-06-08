@@ -23,13 +23,14 @@ data class GoToPointInputState(
 )
 
 /**
- * Input state for the "Add to favorites" dialog (name + latitude + longitude fields).
+ * Input state for the "Add to favorites" dialog (name + optional description + latitude + longitude fields).
  */
 @Immutable
 data class FavoritesInputState(
     val name: InputFieldState = InputFieldState(),
+    val description: InputFieldState = InputFieldState(),
     val latitude: InputFieldState = InputFieldState(),
-    val longitude: InputFieldState = InputFieldState()
+    val longitude: InputFieldState = InputFieldState(),
 )
 
 /**

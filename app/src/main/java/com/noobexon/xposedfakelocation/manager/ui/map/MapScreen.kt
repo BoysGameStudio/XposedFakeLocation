@@ -272,12 +272,14 @@ fun MapScreen(
             val favorite = uiState.addToFavoritesState
             AddToFavoritesDialog(
                 name = favorite.name.value,
+                description = favorite.description.value,
                 latitude = favorite.latitude.value,
                 longitude = favorite.longitude.value,
                 nameErrorRes = favorite.name.errorMessageRes,
                 latitudeErrorRes = favorite.latitude.errorMessageRes,
                 longitudeErrorRes = favorite.longitude.errorMessageRes,
                 onNameChange = mapViewModel::onFavoriteNameChange,
+                onDescriptionChange = mapViewModel::onFavoriteDescriptionChange,
                 onLatitudeChange = mapViewModel::onFavoriteLatitudeChange,
                 onLongitudeChange = mapViewModel::onFavoriteLongitudeChange,
                 onConfirm = mapViewModel::confirmAddFavorite,

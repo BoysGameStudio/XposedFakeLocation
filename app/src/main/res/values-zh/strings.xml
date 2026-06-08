@@ -136,6 +136,7 @@
     <string name="map_updating">正在更新地图…</string>
 
     <string name="field_name">名称</string>
+    <string name="field_description">描述（可选）</string>
     <string name="field_latitude">纬度</string>
     <string name="field_longitude">经度</string>
     <string name="field_template">模板</string>
