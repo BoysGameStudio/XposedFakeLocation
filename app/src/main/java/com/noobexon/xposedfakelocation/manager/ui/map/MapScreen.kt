@@ -174,19 +174,6 @@ fun MapScreen(
                             DropdownMenuItem(
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = stringResource(R.string.screen_favorites)
-                                    )
-                                },
-                                text = { Text(stringResource(R.string.screen_favorites)) },
-                                onClick = {
-                                    showOptionsMenu = false
-                                    navController.navigate(Screen.Favorites.route)
-                                }
-                            )
-                            DropdownMenuItem(
-                                leadingIcon = {
-                                    Icon(
                                         imageVector = Icons.Default.Clear,
                                         contentDescription = stringResource(R.string.map_clear_location)
                                     )
