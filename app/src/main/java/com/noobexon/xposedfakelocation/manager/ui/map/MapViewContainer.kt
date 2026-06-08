@@ -1,4 +1,4 @@
-package com.noobexon.xposedfakelocation.manager.ui.map.components
+package com.noobexon.xposedfakelocation.manager.ui.map
 
 import android.Manifest
 import android.content.Context
@@ -33,8 +33,6 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
 import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_DELAY_MS
 import com.noobexon.xposedfakelocation.data.LOCATION_DETECTION_MAX_ATTEMPTS
 import com.noobexon.xposedfakelocation.data.WORLD_MAP_ZOOM
-import com.noobexon.xposedfakelocation.manager.ui.map.LoadingState
-import com.noobexon.xposedfakelocation.manager.ui.map.MapViewModel
 import kotlinx.coroutines.delay
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.events.MapListener

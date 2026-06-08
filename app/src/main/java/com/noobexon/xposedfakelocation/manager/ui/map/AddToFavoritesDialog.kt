@@ -1,4 +1,4 @@
-package com.noobexon.xposedfakelocation.manager.ui.map.components
+package com.noobexon.xposedfakelocation.manager.ui.map
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,7 +19,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noobexon.xposedfakelocation.R
-import com.noobexon.xposedfakelocation.manager.ui.map.MapViewModel
 
 @Composable
 fun AddToFavoritesDialog(

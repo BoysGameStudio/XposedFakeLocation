@@ -46,10 +46,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
-import com.noobexon.xposedfakelocation.manager.ui.drawer.DrawerContent
-import com.noobexon.xposedfakelocation.manager.ui.map.components.AddToFavoritesDialog
-import com.noobexon.xposedfakelocation.manager.ui.map.components.GoToPointDialog
-import com.noobexon.xposedfakelocation.manager.ui.map.components.MapViewContainer
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
