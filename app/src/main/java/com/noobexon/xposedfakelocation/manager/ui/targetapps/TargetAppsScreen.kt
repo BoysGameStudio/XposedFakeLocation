@@ -1,7 +1,10 @@
 package com.noobexon.xposedfakelocation.manager.ui.targetapps
 
+import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +22,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,39 +32,47 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun TargetAppsScreen(
@@ -111,6 +124,15 @@ private fun TargetAppsContent(
     onToggle: (String) -> Unit,
     onRelaunch: (String) -> Unit,
 ) {
+    var searchActive by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
+    BackHandler(enabled = searchActive) {
+        searchActive = false
+        onSearchQueryChange("")
+        focusManager.clearFocus()
+    }
+
     Scaffold(
         snackbarHost = {
             SnackbarHost(
@@ -120,7 +142,37 @@ private fun TargetAppsContent(
         },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.screen_target_apps)) },
+                title = {
+                    if (searchActive) {
+                        val focusRequester = remember { FocusRequester() }
+                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        val searchFieldDescription = stringResource(R.string.cd_search_apps)
+                        TextField(
+                            value = uiState.searchQuery,
+                            onValueChange = onSearchQueryChange,
+                            placeholder = { Text(stringResource(R.string.target_apps_search_label)) },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                focusedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                cursorColor = MaterialTheme.colorScheme.onPrimary,
+                                focusedPlaceholderColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
+                                unfocusedPlaceholderColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .semantics { contentDescription = searchFieldDescription }
+                        )
+                    } else {
+                        Text(stringResource(R.string.screen_target_apps))
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -128,68 +180,117 @@ private fun TargetAppsContent(
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(onClick = {
+                        if (searchActive) {
+                            searchActive = false
+                            onSearchQueryChange("")
+                            focusManager.clearFocus()
+                        } else {
+                            onNavigateUp()
+                        }
+                    }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_navigate_back)
+                            contentDescription = stringResource(
+                                if (searchActive) R.string.cd_collapse_search else R.string.cd_navigate_back
+                            )
                         )
+                    }
+                },
+                actions = {
+                    if (searchActive) {
+                        IconButton(onClick = {
+                            if (uiState.searchQuery.isEmpty()) {
+                                searchActive = false
+                                focusManager.clearFocus()
+                            } else {
+                                onSearchQueryChange("")
+                            }
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear_search))
+                        }
+                    } else {
+                        IconButton(onClick = { searchActive = true }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search_apps))
+                        }
                     }
                 }
             )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(28.dp))
-
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = onSearchQueryChange,
-                label = { Text(stringResource(R.string.target_apps_search_label)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = stringResource(R.string.target_apps_selected_count, uiState.selectedPackages.size),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            if (!uiState.isModuleActive) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.target_apps_module_inactive),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (uiState.isLoading) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
                 ) {
-                    CircularProgressIndicator()
+                    focusManager.clearFocus()
+                    if (searchActive) {
+                        searchActive = false
+                        onSearchQueryChange("")
+                    }
                 }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(uiState.filteredApps, key = { it.packageName }) { app ->
-                        TargetAppRow(
-                            app = app,
-                            onToggle = { onToggle(app.packageName) },
-                            onRelaunch = { onRelaunch(app.packageName) }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = stringResource(R.string.target_apps_selected_count, uiState.selectedPackages.size),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                if (!uiState.isModuleActive) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.target_apps_module_inactive),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                when {
+                    uiState.isLoading -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    uiState.filteredApps.isEmpty() && uiState.searchQuery.isNotBlank() -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.target_apps_no_results, uiState.searchQuery),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    else -> {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(uiState.filteredApps, key = { it.packageName }) { app ->
+                                TargetAppRow(
+                                    app = app,
+                                    onToggle = { onToggle(app.packageName) },
+                                    onRelaunch = { onRelaunch(app.packageName) }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                            }
+                        }
                     }
                 }
             }

@@ -19,6 +19,7 @@
     <string name="cd_navigate_back">Navigate back</string>
     <string name="cd_change_language">Change language</string>
     <string name="cd_search_settings">Search settings</string>
+    <string name="cd_search_apps">Search apps</string>
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_collapse_search">Collapse search</string>
     <string name="cd_more_options">More options</string>
@@ -161,6 +162,7 @@
 
     <string name="favorites_empty">No favorites added.</string>
     <string name="target_apps_search_label">Search apps or package names</string>
+    <string name="target_apps_no_results">No apps match \"%1$s\"</string>
     <string name="target_apps_selected_count">%1$d selected</string>
     <string name="target_apps_module_inactive">Module is not active. Enable XposedFakeLocation in your Xposed manager to choose target apps.</string>
     <string name="target_apps_scope_request_failed">Couldn\'t update scope: %1$s</string>
