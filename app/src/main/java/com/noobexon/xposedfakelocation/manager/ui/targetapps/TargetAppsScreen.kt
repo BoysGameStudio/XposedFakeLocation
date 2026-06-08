@@ -41,6 +41,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -111,6 +115,7 @@ fun TargetAppsScreen(
         onSearchQueryChange = viewModel::updateSearchQuery,
         onToggle = viewModel::toggleApp,
         onRelaunch = viewModel::relaunchApp,
+        onRefresh = viewModel::refresh,
     )
 }
 
@@ -123,9 +128,18 @@ private fun TargetAppsContent(
     onSearchQueryChange: (String) -> Unit,
     onToggle: (String) -> Unit,
     onRelaunch: (String) -> Unit,
+    onRefresh: () -> Unit,
 ) {
     var searchActive by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    val pullRefreshState = rememberPullToRefreshState()
+    LaunchedEffect(pullRefreshState.isRefreshing) {
+        if (pullRefreshState.isRefreshing) onRefresh()
+    }
+    LaunchedEffect(uiState.isRefreshing) {
+        if (!uiState.isRefreshing && pullRefreshState.isRefreshing) pullRefreshState.endRefresh()
+    }
 
     BackHandler(enabled = searchActive) {
         searchActive = false
@@ -281,15 +295,26 @@ private fun TargetAppsContent(
                         }
                     }
                     else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(uiState.filteredApps, key = { it.packageName }) { app ->
-                                TargetAppRow(
-                                    app = app,
-                                    onToggle = { onToggle(app.packageName) },
-                                    onRelaunch = { onRelaunch(app.packageName) }
-                                )
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .nestedScroll(pullRefreshState.nestedScrollConnection)
+                        ) {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(uiState.filteredApps, key = { it.packageName }) { app ->
+                                    TargetAppRow(
+                                        app = app,
+                                        onToggle = { onToggle(app.packageName) },
+                                        onRelaunch = { onRelaunch(app.packageName) }
+                                    )
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                }
                             }
+                            PullToRefreshContainer(
+                                state = pullRefreshState,
+                                modifier = Modifier.align(Alignment.TopCenter)
+                            )
                         }
                     }
                 }

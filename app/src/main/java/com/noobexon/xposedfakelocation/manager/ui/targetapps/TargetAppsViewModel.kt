@@ -39,6 +39,7 @@ data class TargetAppsUiState(
     val filteredApps: List<TargetAppItem> = emptyList(),
     val searchQuery: String = "",
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val isModuleActive: Boolean = true
 )
 
@@ -50,6 +51,12 @@ sealed interface TargetAppsEvent {
     data class RelaunchFailed(val appLabel: String) : TargetAppsEvent
     data object RootRequired : TargetAppsEvent
 }
+
+private fun List<TargetAppItem>.sortedBySelection(selected: Set<String>): List<TargetAppItem> =
+    sortedWith(
+        compareByDescending<TargetAppItem> { selected.contains(it.packageName) }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label }
+    )
 
 /**
  * The LSPosed scope is the source of truth for which apps the module is injected into.
@@ -201,14 +208,21 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 } else {
                     _uiState.update { it.copy(isModuleActive = true) }
-                    refreshScope()
+                    refreshScope(sortApps = true)
                 }
             }
         }
     }
 
-    /** Re-read the live LSPosed scope and reflect it in the UI + the mirror pref. */
-    private suspend fun refreshScope() {
+    /**
+     * Re-reads the live LSPosed scope and reflects it in the UI and the mirror pref.
+     *
+     * @param sortApps When `true`, the [TargetAppsUiState.apps] list is re-sorted so selected
+     * apps appear first. Pass `true` only on initial load and manual refresh; leave `false`
+     * for scope updates triggered by the user toggling an individual app so the list order
+     * remains stable during interaction.
+     */
+    private suspend fun refreshScope(sortApps: Boolean = false) {
         val service = App.service ?: return
         val scope = withContext(Dispatchers.IO) {
             try {
@@ -220,7 +234,9 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         _uiState.update { state ->
-            state.copy(selectedPackages = scope).recompute()
+            val nextApps = if (sortApps && state.apps.isNotEmpty()) state.apps.sortedBySelection(scope)
+                           else state.apps
+            state.copy(selectedPackages = scope, apps = nextApps).recompute()
         }
 
         preferencesRepository.saveTargetApps(scope)
@@ -266,28 +282,38 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
+    private suspend fun fetchInstalledApps(): List<TargetAppItem> = withContext(Dispatchers.IO) {
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+            .asSequence()
+            .map { it.activityInfo.applicationInfo }
+            .filter { it.packageName != MANAGER_APP_PACKAGE_NAME }
+            .distinctBy { it.packageName }
+            .map { TargetAppItem(label = it.loadLabel(packageManager).toString(), packageName = it.packageName) }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
+            .toList()
+    }
+
     private fun loadInstalledApps() {
         viewModelScope.launch {
-            val installedApps = withContext(Dispatchers.IO) {
-                val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
-                    .asSequence()
-                    .map { it.activityInfo.applicationInfo }
-                    .filter { it.packageName != MANAGER_APP_PACKAGE_NAME }
-                    .distinctBy { it.packageName }
-                    .map {
-                        TargetAppItem(
-                            label = it.loadLabel(packageManager).toString(),
-                            packageName = it.packageName
-                        )
-                    }
-                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
-                    .toList()
-            }
-
+            val fetched = fetchInstalledApps()
             _uiState.update { state ->
-                state.copy(apps = installedApps, isLoading = false).recompute()
+                // Sort by whatever selected packages are already known (may be empty if scope
+                // hasn't arrived yet; refreshScope with sortApps=true will re-sort once it does).
+                state.copy(apps = fetched.sortedBySelection(state.selectedPackages), isLoading = false).recompute()
             }
+        }
+    }
+
+    /** Re-fetches the installed app list and re-reads the LSPosed scope. */
+    fun refresh() {
+        if (_uiState.value.isRefreshing) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            _uiState.update { state ->
+                state.copy(apps = fetchInstalledApps(), isRefreshing = false).recompute()
+            }
+            refreshScope(sortApps = true)
         }
     }
 }
