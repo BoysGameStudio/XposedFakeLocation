@@ -318,6 +318,7 @@ private fun TargetAppsContent(
                     }
                 }
         ) {
+            // TODO: Improve list animation to be smoother
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -395,6 +396,7 @@ private fun TargetAppsContent(
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                                 }
                             }
+                            // TODO: Improve refresh animation
                             PullToRefreshContainer(
                                 state = pullRefreshState,
                                 modifier = Modifier.align(Alignment.TopCenter)

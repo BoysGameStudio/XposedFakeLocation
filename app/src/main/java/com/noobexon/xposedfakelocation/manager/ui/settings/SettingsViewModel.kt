@@ -475,6 +475,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
+    // TODO: add an icon for each setting row to reset to default only that specific one setting.
     /**
      * Restores every spoofing and behavioural preference to its constant default value (see
      * `data/Constants.kt`). Updates all flows optimistically so the UI reflects the reset
