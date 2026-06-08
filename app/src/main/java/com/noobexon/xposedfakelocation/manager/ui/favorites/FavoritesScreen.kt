@@ -55,6 +55,19 @@ import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 
 
+/**
+ * Stateful Favorites screen composable.
+ *
+ * Collects [FavoritesViewModel.favorites] and wires the delete/edit/select callbacks before
+ * delegating all layout to the stateless [FavoritesContent]. Navigation is handled here:
+ * selecting a favorite calls [onFavoriteSelected] (which updates the map marker in [NavGraph])
+ * and then pops the back stack.
+ *
+ * @param navController Used to navigate back after a selection or the back-arrow tap.
+ * @param onFavoriteSelected Called with the chosen [FavoriteLocation] when the user taps a card;
+ *   the caller is expected to apply it as the active spoof target.
+ * @param favoritesViewModel Injected by [viewModel]; can be overridden in tests.
+ */
 @Composable
 fun FavoritesScreen(
     navController: NavController,
@@ -75,6 +88,23 @@ fun FavoritesScreen(
     )
 }
 
+/**
+ * Stateless layout for the Favorites screen.
+ *
+ * Manages two pieces of ephemeral dialog state: [deletePending] (the entry awaiting confirmation
+ * before deletion) and [editPending] (the entry currently open in the edit dialog). Both are
+ * local [remember] state because they are transient UI interactions that don't need to survive
+ * configuration changes or process death.
+ *
+ * Renders either [FavoritesEmptyState] or a [LazyColumn] of [FavoriteItem] cards depending on
+ * whether [favorites] is empty.
+ *
+ * @param favorites The current list of saved favorites, observed from [FavoritesViewModel].
+ * @param onFavoriteClick Called when the user taps a card to select it as the spoof target.
+ * @param onDelete Called with the entry to remove after the user confirms the delete dialog.
+ * @param onEdit Called with the original and updated entry after the user saves the edit dialog.
+ * @param onNavigateUp Called when the back-arrow in the [TopAppBar] is tapped.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FavoritesContent(
@@ -143,6 +173,11 @@ private fun FavoritesContent(
     }
 }
 
+/**
+ * Top app bar for the Favorites screen with the screen title and a back-navigation icon.
+ *
+ * @param onNavigateUp Called when the back-arrow button is tapped.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FavoritesTopAppBar(onNavigateUp: () -> Unit) {
@@ -165,6 +200,13 @@ private fun FavoritesTopAppBar(onNavigateUp: () -> Unit) {
     )
 }
 
+/**
+ * Full-screen empty state shown when the favorites list is empty. Displays a centred icon,
+ * a title, and a short hint directing the user to save a location from the map.
+ *
+ * @param modifier Applied to the root [Column]; caller is expected to pass
+ *   `fillMaxSize + padding` so the content is centred within the available area.
+ */
 @Composable
 private fun FavoritesEmptyState(modifier: Modifier = Modifier) {
     Column(
@@ -195,6 +237,18 @@ private fun FavoritesEmptyState(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * A single [ElevatedCard] row representing one saved favorite location.
+ *
+ * Displays a map-pin leading icon, the entry's name, an optional description (omitted when
+ * blank), and formatted coordinates. Trailing action buttons open the edit dialog and the delete
+ * confirmation dialog respectively.
+ *
+ * @param favorite The favorite entry to display.
+ * @param onClick Called when the card body is tapped (selects the location as the spoof target).
+ * @param onEditClick Called when the edit icon button is tapped.
+ * @param onDeleteClick Called when the delete icon button is tapped.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FavoriteItem(
@@ -274,6 +328,28 @@ private fun FavoriteItem(
     }
 }
 
+/**
+ * Stateful dialog for editing an existing favorite location.
+ *
+ * Unlike the map-screen dialogs which delegate state to [FavoritesViewModel], this dialog owns
+ * its own draft state via [remember]. This is intentional: the edit draft is transient UI state
+ * that does not need to survive configuration changes or process death, and adding ViewModel
+ * state for it would be unnecessary complexity.
+ *
+ * All four fields perform live validation:
+ * - **Name**: required; error shown immediately when the field is cleared.
+ * - **Description**: optional; no validation.
+ * - **Latitude**: must parse as `Double` in `−90..90`; error shown on every keystroke.
+ * - **Longitude**: must parse as `Double` in `−180..180`; error shown on every keystroke.
+ *
+ * A final validation pass runs on "Save" to catch the initial state (e.g. completely invalid
+ * pre-filled coordinates) before calling [onSave].
+ *
+ * @param favorite The entry to edit; used to seed the initial field values.
+ * @param onSave Called with the updated [FavoriteLocation] when all fields are valid and the
+ *   user taps "Save". The caller is responsible for persisting the change.
+ * @param onDismiss Called when the dialog is dismissed without saving.
+ */
 @Composable
 private fun EditFavoriteDialog(
     favorite: FavoriteLocation,
@@ -380,6 +456,16 @@ private fun EditFavoriteDialog(
     )
 }
 
+/**
+ * Confirmation dialog shown before permanently deleting a favorite entry.
+ *
+ * Displays the entry's [favoriteName] in the message body so the user can verify they are
+ * deleting the correct item. The confirm button is tinted error-red to signal a destructive action.
+ *
+ * @param favoriteName The name of the entry being deleted, shown in the dialog message.
+ * @param onConfirm Called when the user confirms deletion.
+ * @param onDismiss Called when the user cancels or dismisses the dialog.
+ */
 @Composable
 private fun DeleteConfirmationDialog(
     favoriteName: String,
