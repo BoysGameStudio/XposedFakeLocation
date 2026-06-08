@@ -96,6 +96,13 @@ fun MapScreen(
         }
     }
 
+    // Navigate to Favorites after a favorite is successfully saved.
+    LaunchedEffect(mapViewModel.navigateToFavoritesEvent) {
+        mapViewModel.navigateToFavoritesEvent.collect {
+            navController.navigate(Screen.Favorites.route) { launchSingleTop = true }
+        }
+    }
+
     ModalNavigationDrawer(
         drawerContent = {
             DrawerContent(

@@ -64,6 +64,13 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val _centerMapEvent = Channel<Unit>(Channel.BUFFERED)
     val centerMapEvent: Flow<Unit> = _centerMapEvent.receiveAsFlow()
 
+    /**
+     * One-shot event emitted after a favorite is successfully saved. [MapScreen] collects this
+     * and navigates the user to the Favorites screen so they can immediately see the new entry.
+     */
+    private val _navigateToFavoritesEvent = Channel<Unit>(Channel.BUFFERED)
+    val navigateToFavoritesEvent: Flow<Unit> = _navigateToFavoritesEvent.receiveAsFlow()
+
     init {
         viewModelScope.launch {
             preferencesRepository.getIsPlayingFlow().collect { isPlaying ->
@@ -349,6 +356,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 preferencesRepository.addFavorite(favorite)
             }
             hideAddToFavoritesDialog()
+            _navigateToFavoritesEvent.trySend(Unit)
         } else {
             _uiState.update {
                 it.copy(
