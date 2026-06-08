@@ -55,7 +55,7 @@ import kotlinx.coroutines.withContext
 sealed interface SystemHooksEvent {
     /**
      * The scope change succeeded and the device must be rebooted for it to take effect (or be
-     * undone). The UI should show a non-dismissible informational dialog.
+     * undone). The UI should show an informational dialog prompting the user to reboot.
      *
      * @property enabled `true` if hooks were just enabled, `false` if they were just disabled.
      */
@@ -278,9 +278,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * individual [Preference] states and [enableSystemHooks] into one [StateFlow] so the screen
      * collects once and receives a complete, consistent update on every change.
      *
-     * [Double]-typed repository values ([accuracy], [altitude], [meanSeaLevel], [randomizeRadius])
-     * are converted to [Float] here, so the UI layer works uniformly in [Float] without
-     * per-field conversion at the collection site.
+     * [Double]-typed repository values ([SettingsUiState.accuracy], [SettingsUiState.altitude],
+     * [SettingsUiState.meanSeaLevel], [SettingsUiState.randomizeRadius]) are converted to [Float]
+     * here, so the UI layer works uniformly in [Float] without per-field conversion at the
+     * collection site.
      */
     val uiState: StateFlow<SettingsUiState> = combine(
         _useRandomize.state, _randomizeRadius.state,
@@ -316,97 +317,97 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Enables or disables custom horizontal accuracy reporting.
-     * @param value `true` to include [accuracy] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.accuracy] in each spoofed fix.
      */
     fun setUseAccuracy(value: Boolean) = _useAccuracy.set(value)
 
     /**
      * Sets the horizontal accuracy radius included in each spoofed fix.
-     * @param value Accuracy in metres. Only applied when [useAccuracy] is `true`.
+     * @param value Accuracy in metres. Only applied when [SettingsUiState.useAccuracy] is `true`.
      */
     fun setAccuracy(value: Double) = _accuracy.set(value)
 
     /**
      * Enables or disables custom ellipsoidal altitude reporting.
-     * @param value `true` to include [altitude] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.altitude] in each spoofed fix.
      */
     fun setUseAltitude(value: Boolean) = _useAltitude.set(value)
 
     /**
      * Sets the ellipsoidal altitude included in each spoofed fix.
-     * @param value Altitude above the WGS84 ellipsoid in metres. Only applied when [useAltitude] is `true`.
+     * @param value Altitude above the WGS84 ellipsoid in metres. Only applied when [SettingsUiState.useAltitude] is `true`.
      */
     fun setAltitude(value: Double) = _altitude.set(value)
 
     /**
      * Enables or disables per-fix randomisation around the chosen point.
-     * @param value `true` to jitter each reported location within [randomizeRadius].
+     * @param value `true` to jitter each reported location within [SettingsUiState.randomizeRadius].
      */
     fun setUseRandomize(value: Boolean) = _useRandomize.set(value)
 
     /**
      * Sets the radius of the randomisation circle around the chosen point.
-     * @param value Radius in metres. Only applied when [useRandomize] is `true`.
+     * @param value Radius in metres. Only applied when [SettingsUiState.useRandomize] is `true`.
      */
     fun setRandomizeRadius(value: Double) = _randomizeRadius.set(value)
 
     /**
      * Enables or disables custom vertical accuracy reporting.
-     * @param value `true` to include [verticalAccuracy] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.verticalAccuracy] in each spoofed fix.
      */
     fun setUseVerticalAccuracy(value: Boolean) = _useVerticalAccuracy.set(value)
 
     /**
      * Sets the vertical accuracy included in each spoofed fix.
-     * @param value Accuracy in metres. Only applied when [useVerticalAccuracy] is `true`.
+     * @param value Accuracy in metres. Only applied when [SettingsUiState.useVerticalAccuracy] is `true`.
      */
     fun setVerticalAccuracy(value: Float) = _verticalAccuracy.set(value)
 
     /**
      * Enables or disables custom mean-sea-level altitude reporting.
-     * @param value `true` to include [meanSeaLevel] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.meanSeaLevel] in each spoofed fix.
      */
     fun setUseMeanSeaLevel(value: Boolean) = _useMeanSeaLevel.set(value)
 
     /**
      * Sets the mean-sea-level altitude included in each spoofed fix.
-     * @param value MSL altitude in metres. Only applied when [useMeanSeaLevel] is `true`.
+     * @param value MSL altitude in metres. Only applied when [SettingsUiState.useMeanSeaLevel] is `true`.
      */
     fun setMeanSeaLevel(value: Double) = _meanSeaLevel.set(value)
 
     /**
      * Enables or disables custom MSL accuracy reporting.
-     * @param value `true` to include [meanSeaLevelAccuracy] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.meanSeaLevelAccuracy] in each spoofed fix.
      */
     fun setUseMeanSeaLevelAccuracy(value: Boolean) = _useMeanSeaLevelAccuracy.set(value)
 
     /**
      * Sets the MSL accuracy included in each spoofed fix.
-     * @param value Accuracy in metres. Only applied when [useMeanSeaLevelAccuracy] is `true`.
+     * @param value Accuracy in metres. Only applied when [SettingsUiState.useMeanSeaLevelAccuracy] is `true`.
      */
     fun setMeanSeaLevelAccuracy(value: Float) = _meanSeaLevelAccuracy.set(value)
 
     /**
      * Enables or disables custom ground speed reporting.
-     * @param value `true` to include [speed] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.speed] in each spoofed fix.
      */
     fun setUseSpeed(value: Boolean) = _useSpeed.set(value)
 
     /**
      * Sets the ground speed included in each spoofed fix.
-     * @param value Speed in metres per second. Only applied when [useSpeed] is `true`.
+     * @param value Speed in metres per second. Only applied when [SettingsUiState.useSpeed] is `true`.
      */
     fun setSpeed(value: Float) = _speed.set(value)
 
     /**
      * Enables or disables custom speed accuracy reporting.
-     * @param value `true` to include [speedAccuracy] in each spoofed fix.
+     * @param value `true` to include [SettingsUiState.speedAccuracy] in each spoofed fix.
      */
     fun setUseSpeedAccuracy(value: Boolean) = _useSpeedAccuracy.set(value)
 
     /**
      * Sets the speed accuracy included in each spoofed fix.
-     * @param value Accuracy in metres per second. Only applied when [useSpeedAccuracy] is `true`.
+     * @param value Accuracy in metres per second. Only applied when [SettingsUiState.useSpeedAccuracy] is `true`.
      */
     fun setSpeedAccuracy(value: Float) = _speedAccuracy.set(value)
 
@@ -463,8 +464,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * Two preferences are intentionally excluded from this reset:
      * - **[enableSystemHooks]** — resetting it would trigger a live Xposed scope change, which
      *   requires the service, may fail, and prompts a reboot dialog.
-     * - **[languageTag]** — resetting it would require recreating the Activity to apply the new
-     *   locale, which is a disruptive side effect for a "reset spoofing defaults" action.
+     * - **[SettingsUiState.languageTag]** — resetting it would require recreating the Activity to
+     *   apply the new locale, which is a disruptive side effect for a "reset spoofing defaults"
+     *   action.
      */
     fun resetToDefaults() {
         setUseAccuracy(DEFAULT_USE_ACCURACY)

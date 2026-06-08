@@ -163,7 +163,7 @@ sealed interface SettingEntry {
     @get:StringRes val descriptionRes: Int
 
     /**
-     * A boolean on/off row backed by a [Switch].
+     * A boolean on/off row backed by a Switch.
      *
      * @property key Stable row identifier.
      * @property titleRes Primary label resource.
@@ -180,14 +180,14 @@ sealed interface SettingEntry {
     ) : SettingEntry
 
     /**
-     * A numeric row with an enable [Switch], an editable value field, and a continuous [Slider].
+     * A numeric row with an enable Switch, an editable value field, and a continuous Slider.
      * All display and interaction logic is driven by [setting]'s static metadata so the row is
      * fully data-driven.
      *
      * @property setting Static metadata (titles, unit, range, default, precision) for this row.
      * @property enabled Whether the setting's value is currently active (controls switch + field/slider visibility).
      * @property onEnabledChange Callback invoked with the new [Boolean] when the enable switch is toggled.
-     * @property value Currently committed value in [NumericSetting.unit].
+     * @property value Currently committed value in the unit described by [NumericSetting.unitRes].
      * @property onValueChange Callback invoked with the new [Float] once the user finishes editing
      *   (field blur / IME Done / slider release), never on every keystroke or drag frame.
      */
@@ -204,7 +204,7 @@ sealed interface SettingEntry {
     }
 
     /**
-     * The language picker row. Tapping anywhere on the row opens a [LanguageSelectionDialog];
+     * The language picker row. Tapping anywhere on the row opens a language selection dialog;
      * selecting an option there applies it immediately and recreates the host Activity.
      *
      * @property selected The currently active [LanguageOption], shown collapsed in the row.

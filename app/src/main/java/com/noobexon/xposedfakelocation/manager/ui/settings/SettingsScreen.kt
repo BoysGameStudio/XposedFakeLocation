@@ -56,6 +56,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -791,6 +792,7 @@ private fun LanguageSelectionDialog(
  * @return A [String] ready for display in the settings row.
  */
 @Composable
+@ReadOnlyComposable
 private fun languageDisplayName(option: LanguageOption): String =
     if (option == LanguageOption.SYSTEM) {
         stringResource(option.labelRes)
@@ -854,7 +856,7 @@ private fun BooleanSettingItem(
  * @param useValue Whether this setting is currently enabled (controls switch state and
  *   field/slider visibility).
  * @param onUseValueChange Invoked when the enable switch is toggled.
- * @param value Current committed value in [NumericSetting.unit].
+ * @param value Current committed value in the unit described by [NumericSetting.unitRes].
  * @param onValueChange Invoked with the final [Float] once the user finishes editing. Never called
  *   mid-keystroke or mid-drag.
  */
