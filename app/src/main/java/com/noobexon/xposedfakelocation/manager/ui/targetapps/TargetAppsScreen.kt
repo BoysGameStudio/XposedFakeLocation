@@ -37,7 +37,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -45,6 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,25 +63,28 @@ fun TargetAppsScreen(
     navController: NavController,
     viewModel: TargetAppsViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            val message = when (event) {
-                is TargetAppsEvent.ModuleNotActive ->
-                    context.getString(R.string.target_apps_module_inactive)
-                is TargetAppsEvent.ScopeRequestFailed ->
-                    context.getString(R.string.target_apps_scope_request_failed, event.message)
-                is TargetAppsEvent.Relaunched ->
-                    context.getString(R.string.target_apps_relaunching, event.appLabel)
-                is TargetAppsEvent.RelaunchFailed ->
-                    context.getString(R.string.target_apps_relaunch_failed, event.appLabel)
-                is TargetAppsEvent.RootRequired ->
-                    context.getString(R.string.target_apps_root_required)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.events.collect { event ->
+                val message = when (event) {
+                    is TargetAppsEvent.ModuleNotActive ->
+                        context.getString(R.string.target_apps_module_inactive)
+                    is TargetAppsEvent.ScopeRequestFailed ->
+                        context.getString(R.string.target_apps_scope_request_failed, event.message)
+                    is TargetAppsEvent.Relaunched ->
+                        context.getString(R.string.target_apps_relaunching, event.appLabel)
+                    is TargetAppsEvent.RelaunchFailed ->
+                        context.getString(R.string.target_apps_relaunch_failed, event.appLabel)
+                    is TargetAppsEvent.RootRequired ->
+                        context.getString(R.string.target_apps_root_required)
+                }
+                snackbarHostState.showSnackbar(message)
             }
-            snackbarHostState.showSnackbar(message)
         }
     }
 
