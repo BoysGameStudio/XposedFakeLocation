@@ -40,7 +40,7 @@ fun MapViewContainer(
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
 
     // Extract state from uiState
-    val loadingState = uiState.loadingState
+    val isLoading = uiState.isLoading
     val lastClickedLocation = uiState.lastClickedLocation
     val isPlaying = uiState.isPlaying
     val mapZoom = uiState.mapZoom
@@ -84,7 +84,7 @@ fun MapViewContainer(
     }
 
     // Display loading spinner or MapView
-    if (loadingState == LoadingState.Loading) {
+    if (isLoading) {
         LoadingSpinner()
     } else {
         DisplayMapView(mapView)

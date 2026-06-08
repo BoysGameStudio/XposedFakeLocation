@@ -32,7 +32,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.noobexon.xposedfakelocation.R
-import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
@@ -59,8 +57,8 @@ fun MapScreen(
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
     val isPlaying = uiState.isPlaying
     val isFabClickable = uiState.isFabClickable
-    val showGoToPointDialog = uiState.goToPointDialogState == DialogState.Visible
-    val showAddToFavoritesDialog = uiState.addToFavoritesDialogState == DialogState.Visible
+    val showGoToPointDialog = uiState.isGoToPointDialogVisible
+    val showAddToFavoritesDialog = uiState.isAddToFavoritesDialogVisible
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showOptionsMenu by remember { mutableStateOf(false) }
@@ -220,33 +218,15 @@ fun MapScreen(
 
         if (showGoToPointDialog) {
             GoToPointDialog(
-                onDismissRequest = { mapViewModel.hideGoToPointDialog() },
-                onGoToPoint = { latitude, longitude ->
-                    mapViewModel.goToPoint(latitude, longitude)
-                    mapViewModel.hideGoToPointDialog()
-                },
-                mapViewModel = mapViewModel
+                mapViewModel = mapViewModel,
+                onDismissRequest = { mapViewModel.hideGoToPointDialog() }
             )
         }
 
         if (showAddToFavoritesDialog) {
-            val lastClickedLocation = uiState.lastClickedLocation
-
-            LaunchedEffect(lastClickedLocation) {
-                mapViewModel.prefillCoordinatesFromMarker(
-                    lastClickedLocation?.latitude,
-                    lastClickedLocation?.longitude
-                )
-            }
-
             AddToFavoritesDialog(
                 mapViewModel = mapViewModel,
-                onDismissRequest = { mapViewModel.hideAddToFavoritesDialog() },
-                onAddFavorite = { name, latitude, longitude ->
-                    val favorite = FavoriteLocation(name, latitude, longitude)
-                    mapViewModel.addFavoriteLocation(favorite)
-                    mapViewModel.hideAddToFavoritesDialog()
-                }
+                onDismissRequest = { mapViewModel.hideAddToFavoritesDialog() }
             )
         }
     }

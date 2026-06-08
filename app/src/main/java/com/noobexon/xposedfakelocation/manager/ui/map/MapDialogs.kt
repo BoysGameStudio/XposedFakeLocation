@@ -23,34 +23,26 @@ import com.noobexon.xposedfakelocation.R
 @Composable
 fun GoToPointDialog(
     mapViewModel: MapViewModel,
-    onDismissRequest: () -> Unit,
-    onGoToPoint: (latitude: Double, longitude: Double) -> Unit
+    onDismissRequest: () -> Unit
 ) {
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
     val goToPointState = uiState.goToPointState
-    val latitudeInput = goToPointState.first.value
-    val longitudeInput = goToPointState.second.value
-    val latitudeError = goToPointState.first.errorMessageRes
-    val longitudeError = goToPointState.second.errorMessageRes
 
     AlertDialog(
-        onDismissRequest = {
-            mapViewModel.clearGoToPointInputs()
-            onDismissRequest()
-        },
+        onDismissRequest = onDismissRequest,
         title = { Text(stringResource(R.string.map_go_to_point)) },
         text = {
             Column {
                 OutlinedTextField(
-                    value = latitudeInput,
-                    onValueChange = { mapViewModel.updateGoToPointField("latitude", it) },
+                    value = goToPointState.latitude.value,
+                    onValueChange = { mapViewModel.onGoToPointLatitudeChange(it) },
                     label = { Text(stringResource(R.string.field_latitude)) },
-                    isError = latitudeError != null,
+                    isError = goToPointState.latitude.errorMessageRes != null,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (latitudeError != null) {
+                goToPointState.latitude.errorMessageRes?.let { errorRes ->
                     Text(
-                        text = stringResource(latitudeError),
+                        text = stringResource(errorRes),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp)
@@ -58,15 +50,15 @@ fun GoToPointDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = longitudeInput,
-                    onValueChange = { mapViewModel.updateGoToPointField("longitude", it) },
+                    value = goToPointState.longitude.value,
+                    onValueChange = { mapViewModel.onGoToPointLongitudeChange(it) },
                     label = { Text(stringResource(R.string.field_longitude)) },
-                    isError = longitudeError != null,
+                    isError = goToPointState.longitude.errorMessageRes != null,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (longitudeError != null) {
+                goToPointState.longitude.errorMessageRes?.let { errorRes ->
                     Text(
-                        text = stringResource(longitudeError),
+                        text = stringResource(errorRes),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp)
@@ -75,23 +67,12 @@ fun GoToPointDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    mapViewModel.validateAndGo { latitude, longitude ->
-                        onGoToPoint(latitude, longitude)
-                    }
-                }
-            ) {
+            TextButton(onClick = { mapViewModel.confirmGoToPoint() }) {
                 Text(stringResource(R.string.action_go))
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = {
-                    mapViewModel.clearGoToPointInputs()
-                    onDismissRequest()
-                }
-            ) {
+            TextButton(onClick = onDismissRequest) {
                 Text(stringResource(R.string.action_cancel))
             }
         }
@@ -101,36 +82,26 @@ fun GoToPointDialog(
 @Composable
 fun AddToFavoritesDialog(
     mapViewModel: MapViewModel,
-    onDismissRequest: () -> Unit,
-    onAddFavorite: (name: String, latitude: Double, longitude: Double) -> Unit
+    onDismissRequest: () -> Unit
 ) {
     val uiState by mapViewModel.uiState.collectAsStateWithLifecycle()
     val addToFavoritesState = uiState.addToFavoritesState
-    val favoriteNameInput = addToFavoritesState.name.value
-    val favoriteLatitudeInput = addToFavoritesState.latitude.value
-    val favoriteLongitudeInput = addToFavoritesState.longitude.value
-    val favoriteNameError = addToFavoritesState.name.errorMessageRes
-    val favoriteLatitudeError = addToFavoritesState.latitude.errorMessageRes
-    val favoriteLongitudeError = addToFavoritesState.longitude.errorMessageRes
 
     AlertDialog(
-        onDismissRequest = {
-            mapViewModel.clearAddToFavoritesInputs()
-            onDismissRequest()
-        },
+        onDismissRequest = onDismissRequest,
         title = { Text(stringResource(R.string.map_add_to_favorites)) },
         text = {
             Column {
                 OutlinedTextField(
-                    value = favoriteNameInput,
-                    onValueChange = { mapViewModel.updateAddToFavoritesField("name", it) },
+                    value = addToFavoritesState.name.value,
+                    onValueChange = { mapViewModel.onFavoriteNameChange(it) },
                     label = { Text(stringResource(R.string.field_name)) },
                     modifier = Modifier.fillMaxWidth(),
-                    isError = favoriteNameError != null
+                    isError = addToFavoritesState.name.errorMessageRes != null
                 )
-                if (favoriteNameError != null) {
+                addToFavoritesState.name.errorMessageRes?.let { errorRes ->
                     Text(
-                        text = stringResource(favoriteNameError),
+                        text = stringResource(errorRes),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp)
@@ -138,16 +109,16 @@ fun AddToFavoritesDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = favoriteLatitudeInput,
-                    onValueChange = { mapViewModel.updateAddToFavoritesField("latitude", it) },
+                    value = addToFavoritesState.latitude.value,
+                    onValueChange = { mapViewModel.onFavoriteLatitudeChange(it) },
                     label = { Text(stringResource(R.string.field_latitude)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-                    isError = favoriteLatitudeError != null
+                    isError = addToFavoritesState.latitude.errorMessageRes != null
                 )
-                if (favoriteLatitudeError != null) {
+                addToFavoritesState.latitude.errorMessageRes?.let { errorRes ->
                     Text(
-                        text = stringResource(favoriteLatitudeError),
+                        text = stringResource(errorRes),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp)
@@ -155,16 +126,16 @@ fun AddToFavoritesDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = favoriteLongitudeInput,
-                    onValueChange = { mapViewModel.updateAddToFavoritesField("longitude", it) },
+                    value = addToFavoritesState.longitude.value,
+                    onValueChange = { mapViewModel.onFavoriteLongitudeChange(it) },
                     label = { Text(stringResource(R.string.field_longitude)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-                    isError = favoriteLongitudeError != null
+                    isError = addToFavoritesState.longitude.errorMessageRes != null
                 )
-                if (favoriteLongitudeError != null) {
+                addToFavoritesState.longitude.errorMessageRes?.let { errorRes ->
                     Text(
-                        text = stringResource(favoriteLongitudeError),
+                        text = stringResource(errorRes),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp)
@@ -173,23 +144,12 @@ fun AddToFavoritesDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    mapViewModel.validateAndAddFavorite { name, latitude, longitude ->
-                        onAddFavorite(name, latitude, longitude)
-                    }
-                }
-            ) {
+            TextButton(onClick = { mapViewModel.confirmAddFavorite() }) {
                 Text(stringResource(R.string.action_add))
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = {
-                    mapViewModel.clearAddToFavoritesInputs()
-                    onDismissRequest()
-                }
-            ) {
+            TextButton(onClick = onDismissRequest) {
                 Text(stringResource(R.string.action_cancel))
             }
         }

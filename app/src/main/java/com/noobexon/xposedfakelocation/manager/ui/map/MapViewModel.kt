@@ -7,16 +7,18 @@ import androidx.lifecycle.viewModelScope
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
+
+private val LATITUDE_RANGE = -90.0..90.0
+private val LONGITUDE_RANGE = -180.0..180.0
 
 /**
  * ViewModel for the Map screen that manages map-related state and operations.
@@ -26,28 +28,26 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     // Private mutable state
     private val _uiState = MutableStateFlow(MapUiState())
-    
+
     // Public immutable state
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
-    // Events
-    private val _goToPointEvent = MutableSharedFlow<GeoPoint>()
-    val goToPointEvent: SharedFlow<GeoPoint> = _goToPointEvent.asSharedFlow()
+    // One-shot events, delivered exactly once to the single map consumer.
+    private val _goToPointEvent = Channel<GeoPoint>(Channel.BUFFERED)
+    val goToPointEvent: Flow<GeoPoint> = _goToPointEvent.receiveAsFlow()
 
-    private val _centerMapEvent = MutableSharedFlow<Unit>()
-    val centerMapEvent: SharedFlow<Unit> = _centerMapEvent.asSharedFlow()
+    private val _centerMapEvent = Channel<Unit>(Channel.BUFFERED)
+    val centerMapEvent: Flow<Unit> = _centerMapEvent.receiveAsFlow()
 
     init {
         viewModelScope.launch {
-            // Load initial isPlaying state
-            preferencesRepository.getIsPlayingFlow().collectLatest { isPlaying ->
+            preferencesRepository.getIsPlayingFlow().collect { isPlaying ->
                 _uiState.update { it.copy(isPlaying = isPlaying) }
             }
         }
-        
+
         viewModelScope.launch {
-            // Load initial lastClickedLocation
-            preferencesRepository.getLastClickedLocationFlow().collectLatest { location ->
+            preferencesRepository.getLastClickedLocationFlow().collect { location ->
                 val geoPoint = location?.let { GeoPoint(it.latitude, it.longitude) }
                 _uiState.update { it.copy(lastClickedLocation = geoPoint) }
             }
@@ -57,7 +57,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     fun togglePlaying() {
         val currentIsPlaying = !_uiState.value.isPlaying
         _uiState.update { it.copy(isPlaying = currentIsPlaying) }
-        
+
         viewModelScope.launch {
             preferencesRepository.saveIsPlaying(currentIsPlaying)
         }
@@ -69,172 +69,181 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateClickedLocation(geoPoint: GeoPoint?) {
         _uiState.update { it.copy(lastClickedLocation = geoPoint) }
-        
+
         viewModelScope.launch {
             geoPoint?.let {
-                preferencesRepository.saveLastClickedLocation(
-                    it.latitude,
-                    it.longitude
-                )
+                preferencesRepository.saveLastClickedLocation(it.latitude, it.longitude)
             } ?: preferencesRepository.clearLastClickedLocation()
         }
     }
 
-    fun addFavoriteLocation(favoriteLocation: FavoriteLocation) {
-        viewModelScope.launch {
-            preferencesRepository.addFavorite(favoriteLocation)
-        }
-    }
-
-    // Update specific fields in the FavoritesInputState
-    fun updateAddToFavoritesField(fieldName: String, newValue: String) {
-        val currentState = _uiState.value.addToFavoritesState
-        val errorMessageRes = when (fieldName) {
-            "name" -> if (newValue.isBlank()) R.string.validation_name_required else null
-            "latitude" -> validateInput(newValue, -90.0..90.0, R.string.validation_latitude_range)
-            "longitude" -> validateInput(newValue, -180.0..180.0, R.string.validation_longitude_range)
-            else -> null
-        }
-
-        val updatedState = when (fieldName) {
-            "name" -> currentState.copy(name = currentState.name.copy(value = newValue, errorMessageRes = errorMessageRes))
-            "latitude" -> currentState.copy(latitude = currentState.latitude.copy(value = newValue, errorMessageRes = errorMessageRes))
-            "longitude" -> currentState.copy(longitude = currentState.longitude.copy(value = newValue, errorMessageRes = errorMessageRes))
-            else -> currentState
-        }
-        
-        _uiState.update { it.copy(addToFavoritesState = updatedState) }
-    }
-
-    // Go to point logic
-    fun goToPoint(latitude: Double, longitude: Double) {
-        viewModelScope.launch {
-            _goToPointEvent.emit(GeoPoint(latitude, longitude))
-        }
-    }
-
-    // Update specific fields in the GoToPointDialog state
-    fun updateGoToPointField(fieldName: String, newValue: String) {
-        val (latitudeField, longitudeField) = _uiState.value.goToPointState
-        val updatedGoToPointState = when (fieldName) {
-            "latitude" -> latitudeField.copy(value = newValue) to longitudeField
-            "longitude" -> latitudeField to longitudeField.copy(value = newValue)
-            else -> latitudeField to longitudeField
-        }
-        
-        _uiState.update { it.copy(goToPointState = updatedGoToPointState) }
-    }
-
-    // Center map
-    fun triggerCenterMapEvent() {
-        viewModelScope.launch {
-            _centerMapEvent.emit(Unit)
-        }
+    fun updateMapZoom(zoom: Double) {
+        _uiState.update { it.copy(mapZoom = zoom) }
     }
 
     fun setLoadingStarted() {
-        _uiState.update { it.copy(loadingState = LoadingState.Loading) }
+        _uiState.update { it.copy(isLoading = true) }
     }
 
-    // Set loading finished
     fun setLoadingFinished() {
-        _uiState.update { it.copy(loadingState = LoadingState.Loaded) }
+        _uiState.update { it.copy(isLoading = false) }
     }
 
-    // Dialog show/hide logic
-    fun showGoToPointDialog() { 
-        _uiState.update { it.copy(goToPointDialogState = DialogState.Visible) }
+    fun triggerCenterMapEvent() {
+        _centerMapEvent.trySend(Unit)
     }
-    
+
+    // ---- Go to point dialog ----
+
+    fun showGoToPointDialog() {
+        _uiState.update { it.copy(isGoToPointDialogVisible = true) }
+    }
+
     fun hideGoToPointDialog() {
-        _uiState.update { it.copy(goToPointDialogState = DialogState.Hidden) }
-        clearGoToPointInputs()
+        _uiState.update {
+            it.copy(isGoToPointDialogVisible = false, goToPointState = GoToPointInputState())
+        }
     }
 
-    fun showAddToFavoritesDialog() { 
-        _uiState.update { it.copy(addToFavoritesDialogState = DialogState.Visible) }
-    }
-    
-    fun hideAddToFavoritesDialog() {
-        _uiState.update { it.copy(addToFavoritesDialogState = DialogState.Hidden) }
-        clearAddToFavoritesInputs()
-    }
-
-    // Helper for input validation
-    private fun validateInput(
-        input: String, range: ClosedRange<Double>, @StringRes errorMessageRes: Int
-    ): Int? {
-        val value = input.toDoubleOrNull()
-        return if (value == null || value !in range) errorMessageRes else null
+    fun onGoToPointLatitudeChange(value: String) {
+        _uiState.update {
+            it.copy(
+                goToPointState = it.goToPointState.copy(
+                    latitude = it.goToPointState.latitude.copy(value = value)
+                )
+            )
+        }
     }
 
-    // Validate GoToPoint inputs
-    fun validateAndGo(onSuccess: (latitude: Double, longitude: Double) -> Unit) {
-        val (latField, lonField) = _uiState.value.goToPointState
-        val latitudeError = validateInput(latField.value, -90.0..90.0, R.string.validation_latitude_range)
-        val longitudeError = validateInput(lonField.value, -180.0..180.0, R.string.validation_longitude_range)
+    fun onGoToPointLongitudeChange(value: String) {
+        _uiState.update {
+            it.copy(
+                goToPointState = it.goToPointState.copy(
+                    longitude = it.goToPointState.longitude.copy(value = value)
+                )
+            )
+        }
+    }
 
-        val updatedGoToPointState = latField.copy(errorMessageRes = latitudeError) to lonField.copy(errorMessageRes = longitudeError)
-        _uiState.update { it.copy(goToPointState = updatedGoToPointState) }
+    /**
+     * Validates the "Go to point" inputs. On success, emits a [goToPointEvent] and dismisses the
+     * dialog; on failure, updates the input fields with validation errors and keeps the dialog open.
+     */
+    fun confirmGoToPoint() {
+        val state = _uiState.value.goToPointState
+        val latitudeError = validateInput(state.latitude.value, LATITUDE_RANGE, R.string.validation_latitude_range)
+        val longitudeError = validateInput(state.longitude.value, LONGITUDE_RANGE, R.string.validation_longitude_range)
 
         if (latitudeError == null && longitudeError == null) {
-            onSuccess(latField.value.toDouble(), lonField.value.toDouble())
-        }
-    }
-
-    // Clear GoToPoint inputs
-    fun clearGoToPointInputs() {
-        _uiState.update { 
-            it.copy(goToPointState = InputFieldState() to InputFieldState())
-        }
-    }
-
-    // Prefill AddToFavorites latitude/longitude with marker values (if available)
-    fun prefillCoordinatesFromMarker(latitude: Double?, longitude: Double?) {
-        if (latitude != null && longitude != null) {
-            val latField = InputFieldState(value = latitude.toString())
-            val lngField = InputFieldState(value = longitude.toString())
-            
-            _uiState.update { currentState ->
-                val favState = currentState.addToFavoritesState
-                currentState.copy(
-                    addToFavoritesState = favState.copy(
-                        latitude = latField,
-                        longitude = lngField
+            _goToPointEvent.trySend(GeoPoint(state.latitude.value.toDouble(), state.longitude.value.toDouble()))
+            hideGoToPointDialog()
+        } else {
+            _uiState.update {
+                it.copy(
+                    goToPointState = it.goToPointState.copy(
+                        latitude = it.goToPointState.latitude.copy(errorMessageRes = latitudeError),
+                        longitude = it.goToPointState.longitude.copy(errorMessageRes = longitudeError)
                     )
                 )
             }
         }
     }
 
-    // Validate and add favorite location
-    fun validateAndAddFavorite(onSuccess: (name: String, latitude: Double, longitude: Double) -> Unit) {
-        val currentState = _uiState.value.addToFavoritesState
+    // ---- Add to favorites dialog ----
 
-        val latitudeError = validateInput(currentState.latitude.value, -90.0..90.0, R.string.validation_latitude_range)
-        val longitudeError = validateInput(currentState.longitude.value, -180.0..180.0, R.string.validation_longitude_range)
-        val nameError = if (currentState.name.value.isBlank()) R.string.validation_name_required else null
-
-        val updatedState = currentState.copy(
-            name = currentState.name.copy(errorMessageRes = nameError),
-            latitude = currentState.latitude.copy(errorMessageRes = latitudeError),
-            longitude = currentState.longitude.copy(errorMessageRes = longitudeError)
-        )
-        
-        _uiState.update { it.copy(addToFavoritesState = updatedState) }
-
-        if (nameError == null && latitudeError == null && longitudeError == null) {
-            onSuccess(currentState.name.value, currentState.latitude.value.toDouble(), currentState.longitude.value.toDouble())
+    fun showAddToFavoritesDialog() {
+        val marker = _uiState.value.lastClickedLocation
+        _uiState.update {
+            it.copy(
+                isAddToFavoritesDialogVisible = true,
+                addToFavoritesState = if (marker != null) {
+                    it.addToFavoritesState.copy(
+                        latitude = InputFieldState(value = marker.latitude.toString()),
+                        longitude = InputFieldState(value = marker.longitude.toString())
+                    )
+                } else {
+                    it.addToFavoritesState
+                }
+            )
         }
     }
 
-    // Clear AddToFavorites inputs
-    fun clearAddToFavoritesInputs() {
-        _uiState.update { it.copy(addToFavoritesState = FavoritesInputState()) }
+    fun hideAddToFavoritesDialog() {
+        _uiState.update {
+            it.copy(isAddToFavoritesDialogVisible = false, addToFavoritesState = FavoritesInputState())
+        }
     }
-    
-    // Update map zoom level
-    fun updateMapZoom(zoom: Double) {
-        _uiState.update { it.copy(mapZoom = zoom) }
+
+    fun onFavoriteNameChange(value: String) {
+        val error = if (value.isBlank()) R.string.validation_name_required else null
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    name = it.addToFavoritesState.name.copy(value = value, errorMessageRes = error)
+                )
+            )
+        }
+    }
+
+    fun onFavoriteLatitudeChange(value: String) {
+        val error = validateInput(value, LATITUDE_RANGE, R.string.validation_latitude_range)
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    latitude = it.addToFavoritesState.latitude.copy(value = value, errorMessageRes = error)
+                )
+            )
+        }
+    }
+
+    fun onFavoriteLongitudeChange(value: String) {
+        val error = validateInput(value, LONGITUDE_RANGE, R.string.validation_longitude_range)
+        _uiState.update {
+            it.copy(
+                addToFavoritesState = it.addToFavoritesState.copy(
+                    longitude = it.addToFavoritesState.longitude.copy(value = value, errorMessageRes = error)
+                )
+            )
+        }
+    }
+
+    /**
+     * Validates the "Add to favorites" inputs. On success, persists the favorite and dismisses the
+     * dialog; on failure, updates the input fields with validation errors and keeps the dialog open.
+     */
+    fun confirmAddFavorite() {
+        val state = _uiState.value.addToFavoritesState
+        val nameError = if (state.name.value.isBlank()) R.string.validation_name_required else null
+        val latitudeError = validateInput(state.latitude.value, LATITUDE_RANGE, R.string.validation_latitude_range)
+        val longitudeError = validateInput(state.longitude.value, LONGITUDE_RANGE, R.string.validation_longitude_range)
+
+        if (nameError == null && latitudeError == null && longitudeError == null) {
+            val favorite = FavoriteLocation(
+                state.name.value,
+                state.latitude.value.toDouble(),
+                state.longitude.value.toDouble()
+            )
+            viewModelScope.launch {
+                preferencesRepository.addFavorite(favorite)
+            }
+            hideAddToFavoritesDialog()
+        } else {
+            _uiState.update {
+                it.copy(
+                    addToFavoritesState = it.addToFavoritesState.copy(
+                        name = it.addToFavoritesState.name.copy(errorMessageRes = nameError),
+                        latitude = it.addToFavoritesState.latitude.copy(errorMessageRes = latitudeError),
+                        longitude = it.addToFavoritesState.longitude.copy(errorMessageRes = longitudeError)
+                    )
+                )
+            }
+        }
+    }
+
+    private fun validateInput(
+        input: String, range: ClosedRange<Double>, @StringRes errorMessageRes: Int
+    ): Int? {
+        val value = input.toDoubleOrNull()
+        return if (value == null || value !in range) errorMessageRes else null
     }
 }

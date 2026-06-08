@@ -1,32 +1,31 @@
 package com.noobexon.xposedfakelocation.manager.ui.map
 
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Immutable
 import org.osmdroid.util.GeoPoint
 
 /**
- * Sealed classes to represent different dialog states
+ * Represents a single text input's value together with an optional validation error.
+ *
+ * @property value The current text content of the field.
+ * @property errorMessageRes A string resource for the validation error, or `null` when valid.
  */
-sealed class DialogState {
-    object Hidden : DialogState()
-    object Visible : DialogState()
-}
-
-/**
- * Sealed class to represent different loading states
- */
-sealed class LoadingState {
-    object Loading : LoadingState()
-    object Loaded : LoadingState()
-}
-
-/**
- * Represents field input state with value and validation error message
- */
+@Immutable
 data class InputFieldState(val value: String = "", @StringRes val errorMessageRes: Int? = null)
 
 /**
- * Represents the UI state for the favorites input dialog
+ * Input state for the "Go to point" dialog (latitude + longitude fields).
  */
+@Immutable
+data class GoToPointInputState(
+    val latitude: InputFieldState = InputFieldState(),
+    val longitude: InputFieldState = InputFieldState()
+)
+
+/**
+ * Input state for the "Add to favorites" dialog (name + latitude + longitude fields).
+ */
+@Immutable
 data class FavoritesInputState(
     val name: InputFieldState = InputFieldState(),
     val latitude: InputFieldState = InputFieldState(),
@@ -34,18 +33,29 @@ data class FavoritesInputState(
 )
 
 /**
- * Represents the complete UI state for the Map screen
+ * The complete UI state for the Map screen.
+ *
+ * @property isPlaying Whether location spoofing is currently active.
+ * @property lastClickedLocation The currently selected spoof location (marker), or `null` if none.
+ * @property userLocation The user's detected real location, used for centering.
+ * @property isLoading Whether the map is still resolving an initial camera position.
+ * @property mapZoom The last known map zoom level, or `null` before the map has settled.
+ * @property isGoToPointDialogVisible Whether the "Go to point" dialog is shown.
+ * @property addToFavoritesState Input/validation state for the "Add to favorites" dialog.
+ * @property isAddToFavoritesDialogVisible Whether the "Add to favorites" dialog is shown.
+ * @property goToPointState Input/validation state for the "Go to point" dialog.
  */
+@Immutable
 data class MapUiState(
     val isPlaying: Boolean = false,
     val lastClickedLocation: GeoPoint? = null,
     val userLocation: GeoPoint? = null,
-    val loadingState: LoadingState = LoadingState.Loading,
+    val isLoading: Boolean = true,
     val mapZoom: Double? = null,
-    val goToPointDialogState: DialogState = DialogState.Hidden,
+    val isGoToPointDialogVisible: Boolean = false,
     val addToFavoritesState: FavoritesInputState = FavoritesInputState(),
-    val addToFavoritesDialogState: DialogState = DialogState.Hidden,
-    val goToPointState: Pair<InputFieldState, InputFieldState> = InputFieldState() to InputFieldState(),
+    val isAddToFavoritesDialogVisible: Boolean = false,
+    val goToPointState: GoToPointInputState = GoToPointInputState(),
 ) {
     val isFabClickable: Boolean
         get() = lastClickedLocation != null
