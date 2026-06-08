@@ -310,10 +310,9 @@ class TargetAppsViewModel(application: Application) : AndroidViewModel(applicati
         if (_uiState.value.isRefreshing) return
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
-            _uiState.update { state ->
-                state.copy(apps = fetchInstalledApps(), isRefreshing = false).recompute()
-            }
+            _uiState.update { state -> state.copy(apps = fetchInstalledApps()).recompute() }
             refreshScope(sortApps = true)
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 }

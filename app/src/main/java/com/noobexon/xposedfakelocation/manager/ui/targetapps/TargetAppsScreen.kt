@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -137,8 +138,12 @@ private fun TargetAppsContent(
     LaunchedEffect(pullRefreshState.isRefreshing) {
         if (pullRefreshState.isRefreshing) onRefresh()
     }
+    val listState = rememberLazyListState()
     LaunchedEffect(uiState.isRefreshing) {
-        if (!uiState.isRefreshing && pullRefreshState.isRefreshing) pullRefreshState.endRefresh()
+        if (!uiState.isRefreshing && pullRefreshState.isRefreshing) {
+            pullRefreshState.endRefresh()
+            listState.scrollToItem(0)
+        }
     }
 
     BackHandler(enabled = searchActive) {
@@ -301,7 +306,7 @@ private fun TargetAppsContent(
                                 .clipToBounds()
                                 .nestedScroll(pullRefreshState.nestedScrollConnection)
                         ) {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                                 items(uiState.filteredApps, key = { it.packageName }) { app ->
                                     TargetAppRow(
                                         app = app,
