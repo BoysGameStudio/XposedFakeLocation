@@ -16,7 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,7 +28,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -46,7 +46,12 @@ import com.noobexon.xposedfakelocation.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(navController: NavController) {
+fun AboutScreen(
+    navController: NavController,
+    viewModel: AboutViewModel = viewModel()
+) {
+    val contributorsState by viewModel.contributorsState.collectAsStateWithLifecycle()
+
     Scaffold(
         topBar = { AboutTopAppBar(navController) }
     ) { innerPadding ->
@@ -56,14 +61,18 @@ fun AboutScreen(navController: NavController) {
                 .padding(innerPadding),
             contentAlignment = Alignment.Center
         ) {
-            AboutContent()
+            AboutContent(
+                contributorsState = contributorsState,
+                developerFallback = viewModel.developerFallback,
+                onRetry = { viewModel.loadContributors(forceRefresh = true) },
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutTopAppBar(navController: NavController) {
+private fun AboutTopAppBar(navController: NavController) {
     TopAppBar(
         title = { Text(stringResource(R.string.screen_about)) },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -74,16 +83,21 @@ fun AboutTopAppBar(navController: NavController) {
         ),
         navigationIcon = {
             IconButton(onClick = { navController.navigateUp() }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.cd_navigate_back)
+                )
             }
         }
     )
 }
 
 @Composable
-fun AboutContent(aboutViewModel: AboutViewModel = viewModel()) {
-    val state by aboutViewModel.contributorsState.collectAsState()
-
+private fun AboutContent(
+    contributorsState: ContributorsUiState,
+    developerFallback: Contributor,
+    onRetry: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .verticalScroll(rememberScrollState())
@@ -97,19 +111,19 @@ fun AboutContent(aboutViewModel: AboutViewModel = viewModel()) {
         AppVersionSection()
         Spacer(modifier = Modifier.height(16.dp))
         AppDeveloperSection(
-            developer = (state as? ContributorsUiState.Success)?.developer
-                ?: aboutViewModel.developerFallback
+            developer = (contributorsState as? ContributorsUiState.Success)?.developer
+                ?: developerFallback
         )
         Spacer(modifier = Modifier.height(16.dp))
         AppContributorsSection(
-            state = state,
-            onRetry = { aboutViewModel.loadContributors(forceRefresh = true) }
+            state = contributorsState,
+            onRetry = onRetry,
         )
     }
 }
 
 @Composable
-fun AppTitle() {
+private fun AppTitle() {
     Text(
         text = stringResource(R.string.app_name),
         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
@@ -118,7 +132,7 @@ fun AppTitle() {
 }
 
 @Composable
-fun AppDescription() {
+private fun AppDescription() {
     Text(
         text = stringResource(R.string.about_description),
         style = MaterialTheme.typography.bodyLarge,
@@ -127,14 +141,14 @@ fun AppDescription() {
 }
 
 @Composable
-fun AppVersionSection() {
+private fun AppVersionSection() {
     AppVersionTitle()
     Spacer(modifier = Modifier.height(16.dp))
     AppVersionValue()
 }
 
 @Composable
-fun AppVersionTitle() {
+private fun AppVersionTitle() {
     Text(
         text = stringResource(R.string.about_version_label),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -144,7 +158,7 @@ fun AppVersionTitle() {
 }
 
 @Composable
-fun AppVersionValue() {
+private fun AppVersionValue() {
     Text(
         text = BuildConfig.VERSION_NAME,
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -154,14 +168,14 @@ fun AppVersionValue() {
 }
 
 @Composable
-fun AppDeveloperSection(developer: Contributor) {
+private fun AppDeveloperSection(developer: Contributor) {
     AppDeveloperTitle()
     Spacer(modifier = Modifier.height(16.dp))
     ContributorRow(developer)
 }
 
 @Composable
-fun AppDeveloperTitle() {
+private fun AppDeveloperTitle() {
     Text(
         text = stringResource(R.string.about_developer_label),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -171,9 +185,9 @@ fun AppDeveloperTitle() {
 }
 
 @Composable
-fun AppContributorsSection(
+private fun AppContributorsSection(
     state: ContributorsUiState,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
 ) {
     Text(
         text = stringResource(R.string.about_contributors_label),

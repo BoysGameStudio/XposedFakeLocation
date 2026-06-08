@@ -1,10 +1,12 @@
 package com.noobexon.xposedfakelocation.manager.ui.about
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +16,7 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
+@Immutable
 data class Contributor(
     val name: String,
     val githubUrl: String,
@@ -21,6 +24,7 @@ data class Contributor(
     val contributions: Int
 )
 
+@Immutable
 sealed interface ContributorsUiState {
     data object Loading : ContributorsUiState
     data class Success(
@@ -64,7 +68,10 @@ class AboutViewModel : ViewModel() {
                         cache = CachedResult(it, System.currentTimeMillis())
                         splitContributors(it)
                     },
-                    onFailure = { ContributorsUiState.Error(it.message) }
+                    onFailure = {
+                        if (it is CancellationException) throw it
+                        ContributorsUiState.Error(it.message)
+                    }
                 )
         }
     }
