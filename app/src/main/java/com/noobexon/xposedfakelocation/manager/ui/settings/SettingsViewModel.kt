@@ -1,4 +1,3 @@
-//SettingsViewModel.kt
 package com.noobexon.xposedfakelocation.manager.ui.settings
 
 import android.app.Application

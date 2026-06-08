@@ -487,7 +487,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
  * when [query] is non-blank to avoid redundant [Context.getString] calls on every recomposition.
  *
  * @param entry The entry whose searchable text is needed.
- * @param context Used to resolve string resources outside of Compose.
+ * @param context Used to resolve string resources outside Compose.
  * @return A single concatenated string suitable for case-insensitive substring matching.
  */
 private fun searchTextOf(entry: SettingEntry, context: Context): String {
@@ -570,14 +570,17 @@ private fun CategoryLabel(title: String) {
 }
 
 /**
- * Reusable row header shared by boolean and numeric setting items. Lays out the [title] with a
- * small info [IconButton] that toggles [description] inline below it, plus a [trailing] slot at
- * the far end of the row (typically a [Switch]).
+ * Reusable row header shared by all setting item composables. Lays out the [title] with a small
+ * info [IconButton] that toggles [description] below it, plus a [trailing] slot at the far end of
+ * the row (typically a [Switch] or a text label). Wrapping the row in [onClick] makes the entire
+ * header tappable (used by the language picker row).
  *
  * @param title Localized setting name shown in [MaterialTheme.typography.titleMedium].
  * @param description Help text revealed when the info icon is tapped.
  * @param showTooltip Whether [description] is currently visible below the title row.
  * @param onToggleTooltip Invoked when the info icon is tapped to toggle [showTooltip].
+ * @param onClick Optional click handler applied to the entire row. When non-null the row becomes
+ *   tappable; the info [IconButton] still consumes its own clicks independently.
  * @param trailing Slot composable placed at the end of the row (e.g. [SettingSwitch]).
  */
 @Composable
@@ -586,45 +589,50 @@ private fun SettingHeader(
     description: String,
     showTooltip: Boolean,
     onToggleTooltip: () -> Unit,
+    onClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit
 ) {
     val moreInfoDescription = stringResource(R.string.setting_more_info, title)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-
-                IconButton(
-                    onClick = onToggleTooltip,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = moreInfoDescription,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
                     )
+
+                    IconButton(
+                        onClick = onToggleTooltip,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = moreInfoDescription,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
-            if (showTooltip) {
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
-                )
-            }
+            trailing()
         }
 
-        trailing()
+        if (showTooltip) {
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Dimensions.SPACING_EXTRA_SMALL)
+            )
+        }
     }
 }
 
@@ -679,57 +687,27 @@ private fun LanguageSettingItem(
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showTooltip by remember { mutableStateOf(false) }
-    val title = stringResource(R.string.setting_language_title)
-    val moreInfoDescription = stringResource(R.string.setting_more_info, title)
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showDialog = true }
-                .padding(Dimensions.SPACING_MEDIUM)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
-            )
-
-            IconButton(
-                onClick = { showTooltip = !showTooltip },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = moreInfoDescription,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(Dimensions.SPACING_SMALL)
+    ) {
+        SettingHeader(
+            title = stringResource(R.string.setting_language_title),
+            description = stringResource(R.string.setting_language_description),
+            showTooltip = showTooltip,
+            onToggleTooltip = { showTooltip = !showTooltip },
+            onClick = { showDialog = true },
+            trailing = {
+                Text(
+                    text = languageDisplayName(selectedLanguage),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = Dimensions.SPACING_SMALL)
                 )
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Text(
-                text = languageDisplayName(selectedLanguage),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = Dimensions.SPACING_SMALL)
-            )
-        }
-
-        if (showTooltip) {
-            Text(
-                text = stringResource(R.string.setting_language_description),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(
-                    start = Dimensions.SPACING_MEDIUM,
-                    end = Dimensions.SPACING_MEDIUM,
-                    bottom = Dimensions.SPACING_MEDIUM
-                )
-            )
-        }
+        )
     }
 
     if (showDialog) {

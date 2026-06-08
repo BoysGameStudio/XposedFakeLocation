@@ -41,8 +41,8 @@ enum class SettingsCategory(@StringRes val titleRes: Int) {
  *   strings consistent between locales without duplicating them in translation files.
  * @property min Inclusive lower bound of the slider and value field.
  * @property max Inclusive upper bound of the slider and value field.
- * @property step Granularity hint; used only to derive [decimals] — values `>= 1f` give zero
- *   decimal places, smaller values give one. It no longer controls discrete slider steps.
+ * @property precision Granularity hint; used only to derive [decimals] — values `>= 1f` give zero
+ *   decimal places, smaller values give one.
  * @property default Value written (and persisted) when the user clears the field and blurs without
  *   entering a number. Sourced directly from `data/Constants.kt` so it stays in sync with the
  *   value produced by [SettingsViewModel.resetToDefaults].
@@ -54,72 +54,72 @@ enum class NumericSetting(
     @StringRes val unitRes: Int,
     val min: Float,
     val max: Float,
-    val step: Float,
+    val precision: Float,
     val default: Float
 ) {
     RANDOMIZE_RADIUS(
         R.string.setting_randomize_title,
         R.string.setting_randomize_description,
         R.string.setting_randomize_radius_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 2000f, step = 0.1f, default = DEFAULT_RANDOMIZE_RADIUS.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 2000f, precision = 0.1f, default = DEFAULT_RANDOMIZE_RADIUS.toFloat()
     ),
     HORIZONTAL_ACCURACY(
         R.string.setting_horizontal_accuracy_title,
         R.string.setting_horizontal_accuracy_description,
         R.string.setting_horizontal_accuracy_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 100f, step = 1f, default = DEFAULT_ACCURACY.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 1f, default = DEFAULT_ACCURACY.toFloat()
     ),
     VERTICAL_ACCURACY(
         R.string.setting_vertical_accuracy_title,
         R.string.setting_vertical_accuracy_description,
         R.string.setting_vertical_accuracy_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 100f, step = 1f, default = DEFAULT_VERTICAL_ACCURACY
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 1f, default = DEFAULT_VERTICAL_ACCURACY
     ),
     ALTITUDE(
         R.string.setting_altitude_title,
         R.string.setting_altitude_description,
         R.string.setting_altitude_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 2000f, step = 0.5f, default = DEFAULT_ALTITUDE.toFloat()
+        unitRes = R.string.unit_meters, min = 0f, max = 2000f, precision = 0.5f, default = DEFAULT_ALTITUDE.toFloat()
     ),
     MEAN_SEA_LEVEL(
         R.string.setting_msl_title,
         R.string.setting_msl_description,
         R.string.setting_msl_label,
-        unitRes = R.string.unit_meters, min = -400f, max = 2000f, step = 0.5f, default = DEFAULT_MEAN_SEA_LEVEL.toFloat()
+        unitRes = R.string.unit_meters, min = -400f, max = 2000f, precision = 0.5f, default = DEFAULT_MEAN_SEA_LEVEL.toFloat()
     ),
     MEAN_SEA_LEVEL_ACCURACY(
         R.string.setting_msl_accuracy_title,
         R.string.setting_msl_accuracy_description,
         R.string.setting_msl_accuracy_label,
-        unitRes = R.string.unit_meters, min = 0f, max = 100f, step = 1f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+        unitRes = R.string.unit_meters, min = 0f, max = 100f, precision = 1f, default = DEFAULT_MEAN_SEA_LEVEL_ACCURACY
     ),
     SPEED(
         R.string.setting_speed_title,
         R.string.setting_speed_description,
         R.string.setting_speed_label,
-        unitRes = R.string.unit_meters_per_second, min = 0f, max = 30f, step = 0.1f, default = DEFAULT_SPEED
+        unitRes = R.string.unit_meters_per_second, min = 0f, max = 30f, precision = 0.1f, default = DEFAULT_SPEED
     ),
     SPEED_ACCURACY(
         R.string.setting_speed_accuracy_title,
         R.string.setting_speed_accuracy_description,
         R.string.setting_speed_accuracy_label,
-        unitRes = R.string.unit_meters_per_second, min = 0f, max = 100f, step = 1f, default = DEFAULT_SPEED_ACCURACY
+        unitRes = R.string.unit_meters_per_second, min = 0f, max = 100f, precision = 1f, default = DEFAULT_SPEED_ACCURACY
     );
 
     /**
      * Number of fractional digits used when formatting or rounding a value for this setting.
-     * Derived from [step]: integer-granularity settings (`step >= 1f`) use `0`; sub-unit settings
-     * use `1`. Consistent between the field label and [roundValue] so the displayed and persisted
-     * values always agree.
+     * Derived from [precision]: integer-granularity settings (`precision >= 1f`) use `0`; sub-unit
+     * settings use `1`. Consistent between the field label and [roundValue] so the displayed and
+     * persisted values always agree.
      */
-    val decimals: Int get() = if (step >= 1f) 0 else 1
+    val decimals: Int get() = if (precision >= 1f) 0 else 1
 
     /**
      * Rounds [value] to [decimals] fractional digits, eliminating the floating-point drift that
      * would otherwise cause the displayed field text and the persisted [Double]/[Float] to diverge.
      *
      * @param value raw value to round (e.g. from a slider drag or typed input).
-     * @return value rounded to the precision implied by [step].
+     * @return value rounded to the precision implied by [precision].
      */
     fun roundValue(value: Float): Float =
         if (decimals == 0) round(value) else round(value * 10f) / 10f
