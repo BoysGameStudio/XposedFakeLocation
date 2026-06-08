@@ -324,20 +324,33 @@ private fun TargetAppsContent(
                             CircularProgressIndicator()
                         }
                     }
-                    uiState.filteredApps.isEmpty() && uiState.searchQuery.isNotBlank() -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.target_apps_no_results, uiState.searchQuery),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    else -> {
+                                uiState.filteredApps.isEmpty() && uiState.searchQuery.isNotBlank() -> {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.target_apps_no_results, uiState.searchQuery),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                uiState.filteredApps.isEmpty() && (!uiState.showUserApps || !uiState.showSystemApps) -> {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.target_apps_filter_no_results),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                else -> {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()

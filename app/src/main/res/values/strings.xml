@@ -165,6 +165,7 @@
     <string name="target_apps_no_results">No apps match \"%1$s\"</string>
     <string name="target_apps_filter_user">User apps</string>
     <string name="target_apps_filter_system">System apps</string>
+    <string name="target_apps_filter_no_results">No apps match the active filter</string>
     <string name="cd_filter_apps">Filter apps</string>
     <string name="target_apps_selected_count">%1$d selected</string>
     <string name="target_apps_module_inactive">Module is not active. Enable XposedFakeLocation in your Xposed manager to choose target apps.</string>
