@@ -19,6 +19,27 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.noobexon.xposedfakelocation.R
 
+/**
+ * Stateless dialog that lets the user jump the camera (and spoof marker) to an arbitrary
+ * coordinate by entering latitude and longitude manually.
+ *
+ * The dialog is fully controlled: it holds no state of its own. All input values and error
+ * annotations come from [MapUiState.goToPointState] (via [MapScreen]), and all mutations are
+ * forwarded through callbacks to [MapViewModel].
+ *
+ * Validation runs only when the user confirms (via [onConfirm]); inline error messages are shown
+ * beneath each field when the corresponding `*ErrorRes` parameter is non-null.
+ *
+ * @param latitude Current text value of the latitude field.
+ * @param longitude Current text value of the longitude field.
+ * @param latitudeErrorRes String resource for the latitude validation error, or `null` if valid.
+ * @param longitudeErrorRes String resource for the longitude validation error, or `null` if valid.
+ * @param onLatitudeChange Called on every keystroke in the latitude field.
+ * @param onLongitudeChange Called on every keystroke in the longitude field.
+ * @param onConfirm Called when the user taps "Go"; triggers validation in [MapViewModel].
+ * @param onDismissRequest Called when the dialog is dismissed (back gesture, scrim tap, or
+ *   "Cancel" button).
+ */
 @Composable
 fun GoToPointDialog(
     latitude: String,
@@ -63,6 +84,29 @@ fun GoToPointDialog(
     )
 }
 
+/**
+ * Stateless dialog that lets the user save the current spoof-target location as a named favourite.
+ *
+ * Like [GoToPointDialog], it is fully controlled: latitude and longitude are pre-filled from the
+ * currently placed marker (done by [MapViewModel.showAddToFavoritesDialog]) so the user only
+ * needs to enter a name. All values and errors flow down from [MapUiState.addToFavoritesState];
+ * all mutations are forwarded via callbacks.
+ *
+ * The name field performs live validation (error appears as soon as the field is cleared), while
+ * the coordinate fields are validated only on confirmation.
+ *
+ * @param name Current text value of the name field.
+ * @param latitude Current text value of the latitude field.
+ * @param longitude Current text value of the longitude field.
+ * @param nameErrorRes String resource for the name validation error, or `null` if valid.
+ * @param latitudeErrorRes String resource for the latitude validation error, or `null` if valid.
+ * @param longitudeErrorRes String resource for the longitude validation error, or `null` if valid.
+ * @param onNameChange Called on every keystroke in the name field (with live validation).
+ * @param onLatitudeChange Called on every keystroke in the latitude field.
+ * @param onLongitudeChange Called on every keystroke in the longitude field.
+ * @param onConfirm Called when the user taps "Add"; triggers full validation in [MapViewModel].
+ * @param onDismissRequest Called when the dialog is dismissed.
+ */
 @Composable
 fun AddToFavoritesDialog(
     name: String,
@@ -120,8 +164,16 @@ fun AddToFavoritesDialog(
 }
 
 /**
- * A single labelled text field with an inline validation error message shown beneath it when
- * [errorRes] is non-null. Shared by both map dialogs.
+ * A single labelled [OutlinedTextField] with an inline validation error message shown beneath it
+ * when [errorRes] is non-null. Shared by both map dialogs to avoid duplication.
+ *
+ * @param value Current field text.
+ * @param onValueChange Called on every keystroke.
+ * @param label Floating label string displayed inside the field.
+ * @param errorRes String resource for the validation error, or `null` when the field is valid.
+ * @param modifier Optional modifier applied to the [OutlinedTextField].
+ * @param keyboardType Keyboard type hint; defaults to [KeyboardType.Unspecified] (text keyboard)
+ *   and is overridden to [KeyboardType.Number] for coordinate fields.
  */
 @Composable
 private fun CoordinateInputField(

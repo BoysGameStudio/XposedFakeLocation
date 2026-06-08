@@ -28,6 +28,42 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
+/**
+ * Hosts the osmdroid [MapView] inside a Compose layout and coordinates all map-related side
+ * effects.
+ *
+ * This composable owns the [MapView] instance (via [rememberMapView]) and the associated osmdroid
+ * overlays ([rememberUserMarker], [rememberLocationOverlay]), keeping them alive across
+ * recompositions. It delegates every side effect — overlay management, event collection, marker
+ * updates, click listening, initial camera positioning, and lifecycle handling — to the
+ * `internal` effect composables in [MapViewEffects].
+ *
+ * The composable is intentionally stateless: it accepts individual primitive/lambda parameters
+ * rather than the full [MapViewModel], so that only affected subtrees recompose when a single
+ * field changes.
+ *
+ * @param isLoading When `true`, hides the map and shows [LoadingSpinner] instead. Becomes `false`
+ *   once [MapViewEffects.CenterMapOnUserLocation] finishes the initial camera placement.
+ * @param lastClickedLocation Current spoof target, or `null`. Passed to [HandleMarkerUpdates].
+ * @param userLocation Cached real device location used by [CenterMapOnUserLocation] for re-entry
+ *   restoration and by [HandleCenterMapEvent] for the "center on me" action.
+ * @param isPlaying Whether spoofing is active. When `true`, map taps are ignored so the marker
+ *   cannot be accidentally moved.
+ * @param mapZoom Last persisted zoom level; used to restore the camera on re-entry.
+ * @param hasResolvedInitialLocation `true` after the one-time initial camera positioning has
+ *   completed. On re-entry the camera is restored instantly instead of re-detecting location.
+ * @param goToPointEvent One-shot [Flow] from [MapViewModel]; animates the camera to the given
+ *   coordinate and places the marker there.
+ * @param centerMapEvent One-shot [Flow] from [MapViewModel]; animates the camera to the user's
+ *   real device location.
+ * @param onClickedLocationChange Callback to update [MapViewModel] when the user taps the map or
+ *   the "Go to point" event resolves.
+ * @param onUserLocationChange Callback to update [MapViewModel] when a real device location is
+ *   detected.
+ * @param onMapZoomChange Callback to persist the zoom level; called on dispose with the final zoom.
+ * @param onLoadingFinished Callback to clear the loading state once the camera is positioned.
+ * @param onInitialLocationResolved Callback to set [MapUiState.hasResolvedInitialLocation].
+ */
 @Composable
 fun MapViewContainer(
     isLoading: Boolean,
@@ -81,6 +117,10 @@ fun MapViewContainer(
     }
 }
 
+/**
+ * Creates and remembers a [MapView] configured with MAPNIK tiles, multi-touch zoom controls,
+ * and the default zoom level. The instance is stable for the lifetime of the composition.
+ */
 @Composable
 private fun rememberMapView(context: Context): MapView {
     return remember {
@@ -93,6 +133,10 @@ private fun rememberMapView(context: Context): MapView {
     }
 }
 
+/**
+ * Creates and remembers the [Marker] used to show the user's chosen spoof-target on the map.
+ * Anchored at the centre-bottom so the marker pin tip points to the exact tap location.
+ */
 @Composable
 private fun rememberUserMarker(mapView: MapView): Marker {
     return remember {
@@ -102,6 +146,11 @@ private fun rememberUserMarker(mapView: MapView): Marker {
     }
 }
 
+/**
+ * Creates and remembers a [MyLocationNewOverlay] backed by a [GpsMyLocationProvider]. Location
+ * updates are enabled immediately; they are disabled again in
+ * [MapViewEffects.ManageMapViewLifecycle] on dispose.
+ */
 @Composable
 private fun rememberLocationOverlay(context: Context, mapView: MapView): MyLocationNewOverlay {
     return remember {
@@ -111,6 +160,10 @@ private fun rememberLocationOverlay(context: Context, mapView: MapView): MyLocat
     }
 }
 
+/**
+ * Shown in place of the map while [MapUiState.isLoading] is `true`. Displays a centred
+ * [CircularProgressIndicator] with a descriptive label.
+ */
 @Composable
 private fun LoadingSpinner() {
     Box(
@@ -131,6 +184,10 @@ private fun LoadingSpinner() {
     }
 }
 
+/**
+ * Embeds [mapView] into the Compose layout via [AndroidView], filling all available space.
+ * Only rendered when [MapUiState.isLoading] is `false`.
+ */
 @Composable
 private fun DisplayMapView(mapView: MapView) {
     AndroidView(

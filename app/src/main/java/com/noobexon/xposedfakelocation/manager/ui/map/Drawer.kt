@@ -46,6 +46,7 @@ import compose.icons.lineawesomeicons.MapSolid
 import compose.icons.lineawesomeicons.MobileAltSolid
 import compose.icons.lineawesomeicons.Telegram
 
+/** Centralised spacing and size constants for the navigation drawer layout. */
 private object DrawerDimensions {
     val SECTION_SPACING = 24.dp
     val ITEM_SPACING = 4.dp
@@ -57,6 +58,29 @@ private object DrawerDimensions {
     val ITEM_CORNER_RADIUS = 12.dp
 }
 
+/**
+ * Content of the [ModalNavigationDrawer] used throughout the app.
+ *
+ * Renders three sections — Navigation, Community, and App Info — plus a sticky version footer at
+ * the bottom. Navigation items highlight the currently active destination reactively via
+ * [currentBackStackEntryAsState].
+ *
+ * **Navigation behaviour**: tapping a navigation item calls the internal `navigateTo` helper which:
+ * - Skips [NavController.navigate] if the destination is already active (avoids duplicate back-
+ *   stack entries) but still closes the drawer.
+ * - Calls [onNavigate] before navigating to a *different* destination so [MapScreen] can record
+ *   the drawer-reopen intent (see [MapViewModel.requestReopenDrawer]).
+ * - Uses `launchSingleTop = true` to prevent multiple copies of the same screen on the back stack.
+ *
+ * Community items (Telegram, Discord, GitHub) open an [Intent.ACTION_VIEW] external link and then
+ * close the drawer; they do not trigger [onNavigate].
+ *
+ * @param navController Used to read the current destination and perform in-app navigation.
+ * @param onCloseDrawer Callback that closes the [ModalNavigationDrawer]; called after every item
+ *   tap (navigation or external link).
+ * @param onNavigate Callback invoked before navigating to a *different* screen. Used by
+ *   [MapScreen] to set the drawer-reopen flag so the drawer is restored when the user goes back.
+ */
 @Composable
 fun DrawerContent(
     navController: NavController,
@@ -172,6 +196,9 @@ fun DrawerContent(
     }
 }
 
+/**
+ * Sticky header at the top of the drawer sheet showing the app name and a short subtitle.
+ */
 @Composable
 private fun DrawerHeader() {
     Column(
@@ -194,6 +221,11 @@ private fun DrawerHeader() {
     }
 }
 
+/**
+ * Small, coloured section heading rendered above a group of [DrawerItem]s.
+ *
+ * @param title The section label (e.g. "Navigation", "Community").
+ */
 @Composable
 private fun DrawerSectionHeader(title: String) {
     Text(
@@ -208,6 +240,19 @@ private fun DrawerSectionHeader(title: String) {
     )
 }
 
+/**
+ * A single tappable row in the navigation drawer.
+ *
+ * When [isSelected] is `true`, the row is rendered with a filled `primaryContainer` background and
+ * `onPrimaryContainer` tint to provide active-destination feedback. Otherwise it renders on a
+ * transparent background with the default `onSurface` tint.
+ *
+ * @param icon Leading icon for the item.
+ * @param label Display label text.
+ * @param onClick Action invoked when the row is tapped.
+ * @param isSelected Whether this item represents the currently active destination.
+ * @param trailingIcon Optional composable placed at the end of the row (e.g. a badge or arrow).
+ */
 @Composable
 private fun DrawerItem(
     icon: ImageVector,

@@ -48,6 +48,25 @@ import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
+/**
+ * Top-level Map screen composable.
+ *
+ * Acts as the wiring layer between [MapViewModel] and the rest of the Map UI. Responsibilities:
+ * - Collects [MapViewModel.uiState] and distributes individual slices to child composables so that
+ *   only the composables that actually care about a piece of state recompose when it changes.
+ * - Hosts the [ModalNavigationDrawer] and manages its [drawerState], including intercepting the
+ *   system back gesture when the drawer is open and re-opening it on re-entry via
+ *   [MapViewModel.consumeReopenDrawerRequest].
+ * - Renders the [Scaffold] with [TopAppBar] (menu, center, overflow actions) and FAB
+ *   (play/stop spoofing toggle). The FAB is visually disabled when no marker has been placed.
+ * - Conditionally overlays [GoToPointDialog] and [AddToFavoritesDialog] based on the corresponding
+ *   `isVisible` flags in [MapUiState]; each dialog receives only the state slice it needs plus
+ *   typed callbacks, keeping dialogs fully stateless.
+ * - Delegates all map-view rendering and side effects to [MapViewContainer].
+ *
+ * @param navController Used by [DrawerContent] for in-app navigation.
+ * @param mapViewModel The screen's ViewModel; injected at the [NavHost] level.
+ */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(

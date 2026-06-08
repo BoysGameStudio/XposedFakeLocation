@@ -17,25 +17,50 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
 
+/** Valid latitude values accepted by the "Go to point" and "Add to favorites" dialogs. */
 private val LATITUDE_RANGE = -90.0..90.0
+
+/** Valid longitude values accepted by the "Go to point" and "Add to favorites" dialogs. */
 private val LONGITUDE_RANGE = -180.0..180.0
 
 /**
- * ViewModel for the Map screen that manages map-related state and operations.
+ * ViewModel for the Map screen.
+ *
+ * Owns all Map-screen state via a single [uiState] [StateFlow], exposes one-shot camera events as
+ * [Channel]-backed [Flow]s, and provides typed mutation functions so the UI never writes directly to
+ * [_uiState].
+ *
+ * **Persistence**: [isPlaying] and [MapUiState.lastClickedLocation] are kept in sync with
+ * [PreferencesRepository] — both are read on init and written back whenever they change.
+ *
+ * **Dialog lifecycle**: each dialog has a paired `show*` / `hide*` function that guards setup and
+ * teardown. The corresponding `confirm*` function validates input; on success it acts (emits event
+ * or persists) and dismisses; on failure it writes error strings into the state so the dialog can
+ * render inline validation messages.
+ *
+ * **Drawer re-open**: a simple boolean flag ([reopenDrawerRequested]) stores the intent to re-open
+ * the navigation drawer when the map screen is returned to after a drawer-triggered navigation.
+ * The flag is consumed exactly once via [consumeReopenDrawerRequest].
  */
 class MapViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = PreferencesRepository(application)
 
-    // Private mutable state
     private val _uiState = MutableStateFlow(MapUiState())
 
-    // Public immutable state
+    /** Snapshot of the full Map-screen UI state, updated atomically. */
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
-    // One-shot events, delivered exactly once to the single map consumer.
+    /**
+     * One-shot event that tells [MapViewEffects.HandleGoToPointEvent] to animate the camera to a
+     * specific coordinate and place the spoof marker there.
+     */
     private val _goToPointEvent = Channel<GeoPoint>(Channel.BUFFERED)
     val goToPointEvent: Flow<GeoPoint> = _goToPointEvent.receiveAsFlow()
 
+    /**
+     * One-shot event that tells [MapViewEffects.HandleCenterMapEvent] to animate the camera back
+     * to the user's real location.
+     */
     private val _centerMapEvent = Channel<Unit>(Channel.BUFFERED)
     val centerMapEvent: Flow<Unit> = _centerMapEvent.receiveAsFlow()
 
@@ -54,6 +79,12 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Toggles location-spoofing on/off and persists the new value.
+     *
+     * The optimistic local update ensures the FAB reflects the new state immediately, while the
+     * coroutine write to [PreferencesRepository] happens asynchronously.
+     */
     fun togglePlaying() {
         val currentIsPlaying = !_uiState.value.isPlaying
         _uiState.update { it.copy(isPlaying = currentIsPlaying) }
@@ -63,10 +94,24 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Updates the cached real-device location that is used for the "center on me" action and for
+     * restoring the camera on re-entry when no spoof marker exists.
+     *
+     * @param location The most-recent device location reported by the location overlay.
+     */
     fun updateUserLocation(location: GeoPoint) {
         _uiState.update { it.copy(userLocation = location) }
     }
 
+    /**
+     * Sets or clears the spoof-target marker and persists the change.
+     *
+     * Passing `null` removes the marker and clears the persisted location so that reopening the
+     * app starts with a clean slate.
+     *
+     * @param geoPoint The new spoof target, or `null` to clear it.
+     */
     fun updateClickedLocation(geoPoint: GeoPoint?) {
         _uiState.update { it.copy(lastClickedLocation = geoPoint) }
 
@@ -77,10 +122,22 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Stores the map's current zoom level so it can be restored when the screen is re-entered.
+     * Called from [MapViewEffects.ManageMapViewLifecycle] on dispose (i.e. when the user navigates
+     * away), capturing the zoom at the exact moment the map is torn down.
+     *
+     * @param zoom The zoom level to persist.
+     */
     fun updateMapZoom(zoom: Double) {
         _uiState.update { it.copy(mapZoom = zoom) }
     }
 
+    /**
+     * Clears the loading state once [MapViewEffects.CenterMapOnUserLocation] has finished
+     * determining the initial camera position. After this call [MapUiState.isLoading] is `false`
+     * and the map view becomes visible.
+     */
     fun setLoadingFinished() {
         _uiState.update { it.copy(isLoading = false) }
     }
@@ -90,8 +147,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(hasResolvedInitialLocation = true) }
     }
 
-    // One-shot request to reopen the navigation drawer once the map screen is returned to, set when
-    // the user navigates to another screen via the drawer. Survives the map screen being destroyed.
+    /**
+     * One-shot flag that signals the map screen should reopen the navigation drawer when it becomes
+     * active again. Set when the user navigates away via the drawer; consumed once on re-entry.
+     * Survives the map composable being destroyed because it lives in the ViewModel.
+     */
     private var reopenDrawerRequested = false
 
     /** Records that the drawer should be reopened the next time the map screen is shown. */
@@ -106,22 +166,37 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         return requested
     }
 
+    /**
+     * Enqueues a [centerMapEvent] to animate the camera back to the user's real location.
+     * Called when the user taps the "My Location" icon in the top bar.
+     */
     fun triggerCenterMapEvent() {
         _centerMapEvent.trySend(Unit)
     }
 
     // ---- Go to point dialog ----
 
+    /** Makes the "Go to point" dialog visible. */
     fun showGoToPointDialog() {
         _uiState.update { it.copy(isGoToPointDialogVisible = true) }
     }
 
+    /**
+     * Dismisses the "Go to point" dialog and resets its input state so it is clean the next time
+     * it is opened.
+     */
     fun hideGoToPointDialog() {
         _uiState.update {
             it.copy(isGoToPointDialogVisible = false, goToPointState = GoToPointInputState())
         }
     }
 
+    /**
+     * Updates the latitude field of the "Go to point" dialog without triggering validation.
+     * Validation only runs on [confirmGoToPoint].
+     *
+     * @param value The raw string typed by the user.
+     */
     fun onGoToPointLatitudeChange(value: String) {
         _uiState.update {
             it.copy(
@@ -132,6 +207,12 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Updates the longitude field of the "Go to point" dialog without triggering validation.
+     * Validation only runs on [confirmGoToPoint].
+     *
+     * @param value The raw string typed by the user.
+     */
     fun onGoToPointLongitudeChange(value: String) {
         _uiState.update {
             it.copy(
@@ -168,6 +249,10 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Add to favorites dialog ----
 
+    /**
+     * Makes the "Add to favorites" dialog visible, pre-filling the latitude and longitude fields
+     * from the currently placed spoof marker (if any) so the user only needs to supply a name.
+     */
     fun showAddToFavoritesDialog() {
         val marker = _uiState.value.lastClickedLocation
         _uiState.update {
@@ -185,12 +270,22 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Dismisses the "Add to favorites" dialog and resets its input state so it is clean the next
+     * time it is opened.
+     */
     fun hideAddToFavoritesDialog() {
         _uiState.update {
             it.copy(isAddToFavoritesDialogVisible = false, addToFavoritesState = FavoritesInputState())
         }
     }
 
+    /**
+     * Updates the name field of the "Add to favorites" dialog with inline live validation — the
+     * field is marked as an error immediately if the value is blank.
+     *
+     * @param value The raw string typed by the user.
+     */
     fun onFavoriteNameChange(value: String) {
         val error = if (value.isBlank()) R.string.validation_name_required else null
         _uiState.update {
@@ -202,6 +297,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Updates the latitude field of the "Add to favorites" dialog with inline live validation.
+     *
+     * @param value The raw string typed by the user.
+     */
     fun onFavoriteLatitudeChange(value: String) {
         val error = validateInput(value, LATITUDE_RANGE, R.string.validation_latitude_range)
         _uiState.update {
@@ -213,6 +313,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Updates the longitude field of the "Add to favorites" dialog with inline live validation.
+     *
+     * @param value The raw string typed by the user.
+     */
     fun onFavoriteLongitudeChange(value: String) {
         val error = validateInput(value, LONGITUDE_RANGE, R.string.validation_longitude_range)
         _uiState.update {
@@ -257,6 +362,14 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Parses [input] as a `Double` and checks whether it falls within [range].
+     *
+     * @param input Raw text from a dialog field.
+     * @param range The valid coordinate range (e.g. `−90..90` for latitude).
+     * @param errorMessageRes String resource to return when the value is invalid.
+     * @return `null` when the input is valid, or [errorMessageRes] when it is not.
+     */
     private fun validateInput(
         input: String, range: ClosedRange<Double>, @StringRes errorMessageRes: Int
     ): Int? {

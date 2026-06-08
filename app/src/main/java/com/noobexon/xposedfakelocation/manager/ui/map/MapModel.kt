@@ -61,6 +61,7 @@ data class MapUiState(
     val goToPointState: GoToPointInputState = GoToPointInputState(),
     val hasResolvedInitialLocation: Boolean = false,
 ) {
+    /** `true` when the FAB should be interactive, i.e. a spoof target has been placed on the map. */
     val isFabClickable: Boolean
         get() = lastClickedLocation != null
 }
