@@ -22,8 +22,8 @@
     <string name="cd_clear_search">Clear search</string>
     <string name="cd_collapse_search">Collapse search</string>
     <string name="cd_more_options">More options</string>
-    <string name="unit_meters">m</string>
-    <string name="unit_meters_per_second">m/s</string>
+    <string name="unit_meters" translatable="false">m</string>
+    <string name="unit_meters_per_second" translatable="false">m/s</string>
     <string name="cd_menu">Menu</string>
     <string name="cd_center">Center</string>
     <string name="cd_options">Options</string>
@@ -127,7 +127,7 @@
     <string name="toast_fake_location_set">Fake Location Set</string>
     <string name="toast_unset_fake_location">Unset Fake Location</string>
     <string name="toast_user_location_not_available">User location not available</string>
-    <string name="map_updating">Updating Map...</string>
+    <string name="map_updating">Updating Map…</string>
 
     <string name="field_name">Name</string>
     <string name="field_latitude">Latitude</string>
