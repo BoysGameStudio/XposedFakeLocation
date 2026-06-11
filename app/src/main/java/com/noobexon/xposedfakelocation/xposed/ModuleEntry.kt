@@ -19,7 +19,6 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 class ModuleEntry : XposedModule() {
     companion object {
         const val TAG = "[ModuleEntry]"
-        private const val PHONE_PACKAGE = "com.android.phone"
     }
 
     private var locationApiHooks: LocationApiHooks? = null
@@ -29,12 +28,12 @@ class ModuleEntry : XposedModule() {
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         log(Log.INFO, TAG, "onModuleLoaded: ${param.processName}")
-        LocationUtil.logger = { priority, tag, message -> log(priority, tag, message) }
-        PreferencesUtil.logger = { priority, tag, message -> log(priority, tag, message) }
+        initUtilsLoggers()
     }
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
         log(Log.INFO, TAG, "onPackageLoaded: ${param.packageName}")
+        PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
     }
 
     override fun onPackageReady(param: PackageReadyParam) {
@@ -42,12 +41,10 @@ class ModuleEntry : XposedModule() {
 
         if (!param.isFirstPackage) return // Run per-package setup only once.
 
-        PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
-
-        if (param.packageName == PHONE_PACKAGE) {
+        if (param.packageName == "com.android.phone") {
             // Telephony process: only the cell/Wi-Fi telephony spoofing belongs here. We deliberately
             // skip LocationApiHooks so we don't fake com.android.phone's own location requests.
-            phoneServicesHooks = PhoneServicesHooks(this, param.classLoader).also { it.initHooks() }
+            initPhoneServiceHooks(param.classLoader)
         } else {
             initHooks(param.classLoader)
             if (PreferencesUtil.getHideFakeLocationToast() != true) {
@@ -63,7 +60,12 @@ class ModuleEntry : XposedModule() {
         // "android" to the module scope). Per-intercept isPlaying + target_apps gating keeps these
         // inert until the user is actively spoofing a selected target.
         PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
-        systemServicesHooks = SystemServicesHooks(this, param.classLoader).also { it.initHooks() }
+        initSystemHooks(param.classLoader)
+    }
+
+    private fun initUtilsLoggers() {
+        LocationUtil.logger = { priority, tag, message -> log(priority, tag, message) }
+        PreferencesUtil.logger = { priority, tag, message -> log(priority, tag, message) }
     }
 
     private fun initHooks(classLoader: ClassLoader) {
@@ -71,13 +73,19 @@ class ModuleEntry : XposedModule() {
         locationManagerApiHooks = LocationManagerApiHooks(this, classLoader).also { it.initHooks() }
     }
 
+    private fun initPhoneServiceHooks(classLoader: ClassLoader) {
+        phoneServicesHooks = PhoneServicesHooks(this, classLoader).also { it.initHooks() }
+    }
+
+    private fun initSystemHooks(classLoader: ClassLoader) {
+        systemServicesHooks = SystemServicesHooks(this, classLoader).also { it.initHooks() }
+    }
+
     private fun showActiveToast(param: PackageReadyParam) {
         val clazz = Class.forName("android.app.Instrumentation", false, param.classLoader)
         val method = clazz.getDeclaredMethod("callApplicationOnCreate", Application::class.java)
-
         hook(method).intercept { chain ->
             val result = chain.proceed()
-
             try {
                 val context = (chain.getArg(0) as Application).applicationContext
                 log(Log.INFO, TAG, "Target App's context has been acquired (${param.packageName}).")
@@ -85,7 +93,6 @@ class ModuleEntry : XposedModule() {
             } catch (e: Exception) {
                 log(Log.ERROR, TAG, "Toast/context failed - ${e.message}")
             }
-
             result
         }
     }
