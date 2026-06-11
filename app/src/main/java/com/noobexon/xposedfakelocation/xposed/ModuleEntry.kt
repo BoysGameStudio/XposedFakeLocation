@@ -30,11 +30,6 @@ private const val TAG = "[ModuleEntry]"
  */
 class ModuleEntry : XposedModule() {
     
-    private var locationApiHooks: LocationApiHooks? = null
-    private var locationManagerApiHooks: LocationManagerApiHooks? = null
-    private var systemServicesHooks: SystemServicesHooks? = null
-    private var phoneServicesHooks: PhoneServicesHooks? = null
-
     /**
      * Called once when the module is first loaded into a process.
      * Wires the module logger into [LocationUtil] and [PreferencesUtil] so hook-side
@@ -106,18 +101,18 @@ class ModuleEntry : XposedModule() {
 
     /** Installs [LocationApiHooks] and [LocationManagerApiHooks] into the target app process. */
     private fun initHooks(classLoader: ClassLoader) {
-        locationApiHooks = LocationApiHooks(this, classLoader).also { it.initHooks() }
-        locationManagerApiHooks = LocationManagerApiHooks(this, classLoader).also { it.initHooks() }
+        LocationApiHooks(this, classLoader).initHooks()
+        LocationManagerApiHooks(this, classLoader).initHooks()
     }
 
     /** Installs [PhoneServicesHooks] into the `com.android.phone` process. */
     private fun initPhoneServiceHooks(classLoader: ClassLoader) {
-        phoneServicesHooks = PhoneServicesHooks(this, classLoader).also { it.initHooks() }
+        PhoneServicesHooks(this, classLoader).initHooks()
     }
 
     /** Installs [SystemServicesHooks] into the system_server process. */
     private fun initSystemHooks(classLoader: ClassLoader) {
-        systemServicesHooks = SystemServicesHooks(this, classLoader).also { it.initHooks() }
+        SystemServicesHooks(this, classLoader).initHooks()
     }
 
     /**
