@@ -57,8 +57,10 @@ object PreferencesUtil {
 
     @Volatile private var preferences: SharedPreferences? = null
 
-    // IMPORTANT: keep a strong reference. SharedPreferences holds listeners *weakly*,
-    // so a listener that isn't referenced anywhere gets GC'd and silently stops firing.
+    /**
+     * IMPORTANT: must be held as a strong reference. [SharedPreferences] registers listeners
+     * weakly, so a listener with no other reference will be GC'd and silently stop firing.
+     */
     private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         log("Remote pref changed: $key")
     }
