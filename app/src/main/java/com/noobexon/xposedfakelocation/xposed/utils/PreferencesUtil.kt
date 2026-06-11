@@ -46,7 +46,7 @@ object PreferencesUtil {
     // IMPORTANT: keep a strong reference. SharedPreferences holds listeners *weakly*,
     // so a listener that isn't referenced anywhere gets GC'd and silently stops firing.
     private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            log("Remote pref changed: $key")
+        log("Remote pref changed: $key")
     }
 
     fun init(prefs: SharedPreferences) {

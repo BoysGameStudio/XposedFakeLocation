@@ -16,11 +16,11 @@ import com.noobexon.xposedfakelocation.data.PI
 import com.noobexon.xposedfakelocation.data.RADIUS_EARTH
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import kotlin.math.asin
-import kotlin.random.Random
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 object LocationUtil {
     private const val TAG = "[LocationUtil]"
@@ -128,23 +128,23 @@ object LocationUtil {
             }
 
             if (PreferencesUtil.getUseVerticalAccuracy() == true) {
-                verticalAccuracy = PreferencesUtil.getVerticalAccuracy()?.toFloat() ?: DEFAULT_VERTICAL_ACCURACY
+                verticalAccuracy = PreferencesUtil.getVerticalAccuracy() ?: DEFAULT_VERTICAL_ACCURACY
             }
 
             if (PreferencesUtil.getUseMeanSeaLevel() == true) {
-                meanSeaLevel = PreferencesUtil.getMeanSeaLevel()?.toDouble() ?: DEFAULT_MEAN_SEA_LEVEL
+                meanSeaLevel = PreferencesUtil.getMeanSeaLevel() ?: DEFAULT_MEAN_SEA_LEVEL
             }
 
             if (PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
-                meanSeaLevelAccuracy = PreferencesUtil.getMeanSeaLevelAccuracy()?.toFloat() ?: DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+                meanSeaLevelAccuracy = PreferencesUtil.getMeanSeaLevelAccuracy() ?: DEFAULT_MEAN_SEA_LEVEL_ACCURACY
             }
 
             if (PreferencesUtil.getUseSpeed() == true) {
-                speed = PreferencesUtil.getSpeed()?.toFloat() ?: DEFAULT_SPEED
+                speed = PreferencesUtil.getSpeed() ?: DEFAULT_SPEED
             }
 
             if (PreferencesUtil.getUseSpeedAccuracy() == true) {
-                speedAccuracy = PreferencesUtil.getSpeedAccuracy()?.toFloat() ?: DEFAULT_SPEED_ACCURACY
+                speedAccuracy = PreferencesUtil.getSpeedAccuracy() ?: DEFAULT_SPEED_ACCURACY
             }
         }.onFailure { log("Error - ${it.message}", priority = Log.ERROR) }
     }
