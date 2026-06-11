@@ -103,13 +103,6 @@ object LocationUtil {
         return fakeLocation
     }
 
-    private fun attemptHideMockProvider(fakeLocation: Location) {
-        runCatching {
-            HiddenApiBypass.invoke(fakeLocation.javaClass, fakeLocation, "setIsFromMockProvider", false)
-            log("invoked hidden API - setIsFromMockProvider: false)")
-        }.onFailure { log("Not possible to mock - ${it.message}", priority = Log.ERROR) }
-    }
-
     @Synchronized
     fun updateLocation() {
         runCatching {
@@ -191,6 +184,13 @@ object LocationUtil {
         val finalLat = newLat.coerceIn(-90.0, 90.0)
 
         return Pair(finalLat, newLon)
+    }
+
+    private fun attemptHideMockProvider(fakeLocation: Location) {
+        runCatching {
+            HiddenApiBypass.invoke(fakeLocation.javaClass, fakeLocation, "setIsFromMockProvider", false)
+            log("invoked hidden API - setIsFromMockProvider: false)")
+        }.onFailure { log("Not possible to mock - ${it.message}", priority = Log.ERROR) }
     }
 
     /**
