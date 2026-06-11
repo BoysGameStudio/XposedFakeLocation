@@ -74,9 +74,7 @@ class ModuleEntry : XposedModule() {
             initPhoneServiceHooks(param.classLoader) 
         } else {
             initHooks(param.classLoader)
-            if (PreferencesUtil.getHideFakeLocationToast() != true) {
-                showActiveToast(param)
-            }
+            if (PreferencesUtil.getHideFakeLocationToast() != true) showActiveToast(param)
         }
     }
 
