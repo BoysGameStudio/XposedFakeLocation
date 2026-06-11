@@ -34,10 +34,24 @@ import com.noobexon.xposedfakelocation.data.KEY_USE_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.KEY_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
 
+/**
+ * Hook-side accessor for the LSPosed remote [SharedPreferences] written by the manager app.
+ *
+ * All spoofing settings (coordinates, toggles, target app list) live in the remote preference
+ * group and are read here on every hook intercept, ensuring hooks always reflect the latest
+ * manager state without requiring a process restart.
+ *
+ * Must be initialised via [init] before any getter is called. Typically called from
+ * [com.noobexon.xposedfakelocation.xposed.ModuleEntry.onPackageLoaded].
+ */
 object PreferencesUtil {
     private const val TAG = "[PreferencesUtil]"
     private val gson = Gson()
 
+    /**
+     * Optional logger wired in by [com.noobexon.xposedfakelocation.xposed.ModuleEntry].
+     * Routes log calls through the libxposed logging channel.
+     */
     @Volatile var logger: ((Int, String, String) -> Unit)? = null
     private fun log(msg: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, msg)
 
@@ -49,12 +63,19 @@ object PreferencesUtil {
         log("Remote pref changed: $key")
     }
 
+    /**
+     * Initialises this util with the LSPosed remote [SharedPreferences] for the module's
+     * settings group. Registers a change listener to log preference updates.
+     *
+     * Safe to call multiple times — subsequent calls replace the previous preferences instance.
+     */
     fun init(prefs: SharedPreferences) {
         preferences = prefs
         prefs.registerOnSharedPreferenceChangeListener(changeListener)
         log("Initialized with remote preferences")
     }
 
+    /** @return `true` if spoofing is currently active, `false`/`null` if not set. */
     fun getIsPlaying(): Boolean? = getPreference(KEY_IS_PLAYING)
     fun getLastClickedLocation(): LastClickedLocation? = getPreference(KEY_LAST_CLICKED_LOCATION)
     fun getUseAccuracy(): Boolean? = getPreference(KEY_USE_ACCURACY)
@@ -75,6 +96,12 @@ object PreferencesUtil {
     fun getSpeedAccuracy(): Float? = getPreference(KEY_SPEED_ACCURACY)
     fun getHideFakeLocationToast(): Boolean? = getPreference(KEY_HIDE_FAKE_LOCATION_TOAST)
 
+    /**
+     * Returns the set of package names selected by the user as spoofing targets.
+     *
+     * Stored as a JSON array in remote preferences and parsed on each call.
+     * Returns an empty set if preferences are uninitialised, the key is absent, or parsing fails.
+     */
     fun getTargetApps(): Set<String> {
         val prefs = preferences ?: return emptySet()
         val json = prefs.getString(KEY_TARGET_APPS, null) ?: return emptySet()
@@ -85,6 +112,16 @@ object PreferencesUtil {
             .getOrDefault(emptySet())
     }
 
+    /**
+     * Generic preference reader. Dispatches to the correct [SharedPreferences] getter based
+     * on the reified type [T]:
+     * - [Double] — stored as raw long bits via [java.lang.Double.doubleToRawLongBits] to work
+     *   around the lack of a `putDouble` API on [SharedPreferences].
+     * - [Float] / [Boolean] — stored natively.
+     * - Everything else — stored as a JSON string and deserialised with [gson].
+     *
+     * Returns `null` if preferences are not yet initialised or the key is absent.
+     */
     private inline fun <reified T> getPreference(key: String): T? {
         val preferences = preferences ?: return null
         return when (T::class) {

@@ -22,32 +22,70 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
+/**
+ * Singleton holding the current spoofed location state and utilities for building
+ * fake [Location] objects.
+ *
+ * All mutable fields are updated exclusively by [updateLocation], which pulls the
+ * latest values from [PreferencesUtil] on every call. External callers (hooks) read
+ * the fields but cannot write them directly.
+ */
 object LocationUtil {
     private const val TAG = "[LocationUtil]"
 
+    /**
+     * Optional logger wired in by [com.noobexon.xposedfakelocation.xposed.ModuleEntry].
+     * When set, all [log] calls are routed through the libxposed logging channel.
+     * Must be `@Volatile` because it is written from one thread and read from many.
+     */
     @Volatile
     var logger: ((priority: Int, tag: String, message: String) -> Unit)? = null
     private fun log(message: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, message)
 
+    /** Current spoofed latitude in decimal degrees. Updated by [updateLocation]. */
     var latitude: Double = 0.0
         private set
+    /** Current spoofed longitude in decimal degrees. Updated by [updateLocation]. */
     var longitude: Double = 0.0
         private set
+    /** Current spoofed horizontal accuracy in metres. Zero means "not overridden". */
     var accuracy: Float = 0F
         private set
+    /** Current spoofed altitude in metres above WGS-84. Zero means "not overridden". */
     var altitude: Double = 0.0
         private set
+    /** Current spoofed vertical accuracy in metres. Zero means "not overridden". */
     var verticalAccuracy: Float = 0F
         private set
+    /** Current spoofed MSL altitude in metres (API 34+). Zero means "not overridden". */
     var meanSeaLevel: Double = 0.0
         private set
+    /** Current spoofed MSL altitude accuracy in metres (API 34+). Zero means "not overridden". */
     var meanSeaLevelAccuracy: Float = 0F
         private set
+    /** Current spoofed ground speed in m/s. Zero means "not overridden". */
     var speed: Float = 0F
         private set
+    /** Current spoofed speed accuracy in m/s. Zero means "not overridden". */
     var speedAccuracy: Float = 0F
         private set
 
+    /**
+     * Builds a [Location] object populated with the current spoofed field values.
+     *
+     * If [originalLocation] is provided its metadata (time, bearing, elapsed realtime, etc.)
+     * is preserved; otherwise a fresh [Location] is created with a slightly backdated timestamp
+     * to satisfy recency checks in some apps.
+     *
+     * Only non-zero spoofed fields are applied, so unset optional fields fall back to whatever
+     * the [originalLocation] carried. The mock-provider flag is cleared via [attemptHideMockProvider].
+     *
+     * This method is `@Synchronized` to prevent reading partially-updated fields if
+     * [updateLocation] is called concurrently.
+     *
+     * @param originalLocation Optional real location whose metadata is copied into the result.
+     * @param provider Location provider string written into the returned [Location].
+     */
     @Synchronized
     fun createFakeLocation(originalLocation: Location? = null, provider: String = LocationManager.GPS_PROVIDER): Location {
         val fakeLocation = if (originalLocation == null) {
@@ -103,6 +141,18 @@ object LocationUtil {
         return fakeLocation
     }
 
+    /**
+     * Reads the latest spoofed location settings from [PreferencesUtil] and updates all
+     * mutable fields on this object.
+     *
+     * Coordinates are either taken directly from the last clicked location or randomized
+     * within a user-configured radius using the Haversine formula. Optional fields
+     * (accuracy, altitude, speed, etc.) are only updated when their corresponding
+     * "use" flag is enabled in preferences.
+     *
+     * This method is `@Synchronized` to guarantee that [createFakeLocation] always sees a
+     * consistent snapshot even when called from a different thread.
+     */
     @Synchronized
     fun updateLocation() {
         runCatching {
@@ -151,7 +201,13 @@ object LocationUtil {
         }.onFailure { log("Error - ${it.message}", priority = Log.ERROR) }
     }
 
-    // Calculates a random point within a circle around the fake location that has the radius set by by the user. Uses Haversine's formula.
+    /**
+     * Calculates a uniformly distributed random point within a circle of [radiusInMeters]
+     * centred at ([lat], [lon]) using the Haversine formula.
+     *
+     * @return A [Pair] of (latitude, longitude) in decimal degrees, clamped/normalised
+     *         to valid WGS-84 ranges.
+     */
     private fun getRandomLocation(lat: Double, lon: Double, radiusInMeters: Double): Pair<Double, Double> {
         val radiusInRadians = radiusInMeters / RADIUS_EARTH
 
@@ -186,6 +242,13 @@ object LocationUtil {
         return Pair(finalLat, newLon)
     }
 
+    /**
+     * Attempts to clear the mock-provider flag on [fakeLocation] via the hidden API
+     * `Location.setIsFromMockProvider(false)`, bypassed using [HiddenApiBypass].
+     *
+     * Failure is logged but silently swallowed — some ROM variants or future API levels
+     * may block this call, in which case spoofing still works but the mock flag remains set.
+     */
     private fun attemptHideMockProvider(fakeLocation: Location) {
         runCatching {
             HiddenApiBypass.invoke(fakeLocation.javaClass, fakeLocation, "setIsFromMockProvider", false)
