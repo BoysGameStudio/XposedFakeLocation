@@ -55,11 +55,6 @@ object PreferencesUtil {
         log("Initialized with remote preferences")
     }
 
-    private val locationProxyPackages = setOf(
-        "com.android.location.fused",
-        "com.google.android.gms"
-    )
-
     fun getIsPlaying(): Boolean? {
         return getPreference<Boolean>(KEY_IS_PLAYING)
     }
