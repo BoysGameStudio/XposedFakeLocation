@@ -30,14 +30,23 @@ object LocationUtil {
     private fun log(message: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, message)
 
     var latitude: Double = 0.0
+        private set
     var longitude: Double = 0.0
+        private set
     var accuracy: Float = 0F
+        private set
     var altitude: Double = 0.0
+        private set
     var verticalAccuracy: Float = 0F
+        private set
     var meanSeaLevel: Double = 0.0
+        private set
     var meanSeaLevelAccuracy: Float = 0F
+        private set
     var speed: Float = 0F
+        private set
     var speedAccuracy: Float = 0F
+        private set
 
     @Synchronized
     fun createFakeLocation(originalLocation: Location? = null, provider: String = LocationManager.GPS_PROVIDER): Location {
