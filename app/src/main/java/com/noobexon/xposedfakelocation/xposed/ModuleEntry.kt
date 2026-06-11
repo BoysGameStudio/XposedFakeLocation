@@ -16,6 +16,16 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 
+/**
+ * Entry point for the Xposed module, loaded by LSPosed into every process in scope.
+ *
+ * Responsibilities:
+ * - Wire loggers into [LocationUtil] and [PreferencesUtil] on module load.
+ * - Initialize remote preferences and install the appropriate hook set for each process:
+ *   - Regular target apps → [LocationApiHooks] + [LocationManagerApiHooks].
+ *   - `com.android.phone` → [PhoneServicesHooks] only (telephony cell/Wi-Fi spoofing).
+ *   - `android` (system_server, when opted in) → [SystemServicesHooks].
+ */
 class ModuleEntry : XposedModule() {
     companion object {
         const val TAG = "[ModuleEntry]"
@@ -26,25 +36,42 @@ class ModuleEntry : XposedModule() {
     private var systemServicesHooks: SystemServicesHooks? = null
     private var phoneServicesHooks: PhoneServicesHooks? = null
 
+    /**
+     * Called once when the module is first loaded into a process.
+     * Wires the module logger into [LocationUtil] and [PreferencesUtil] so hook-side
+     * log calls are routed through the libxposed logging channel.
+     */
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         log(Log.INFO, TAG, "onModuleLoaded: ${param.processName}")
         initLoggers()
     }
 
+    /**
+     * Called when a package's dex is loaded but before [Application.onCreate].
+     * Used to initialize remote preferences early so they are available by the time
+     * hooks fire.
+     */
     override fun onPackageLoaded(param: PackageLoadedParam) {
         log(Log.INFO, TAG, "onPackageLoaded: ${param.packageName}")
         initRemotePreferences()
     }
 
+    /**
+     * Called when a package's [Application] is ready.
+     * Installs the correct hook set for the process:
+     * - `com.android.phone` gets [PhoneServicesHooks] only.
+     * - All other scoped apps get [LocationApiHooks] + [LocationManagerApiHooks],
+     *   plus an optional toast indicating that spoofing is active.
+     *
+     * Only the first package in the process is processed ([PackageReadyParam.isFirstPackage]).
+     */
     override fun onPackageReady(param: PackageReadyParam) {
         log(Log.INFO, TAG, "onPackageReady: ${param.packageName}")
 
         if (!param.isFirstPackage) return // Run per-package setup only once.
 
         if (param.packageName == "com.android.phone") {
-            // Telephony process: only the cell/Wi-Fi telephony spoofing belongs here. We deliberately
-            // skip LocationApiHooks so we don't fake com.android.phone's own location requests.
-            initPhoneServiceHooks(param.classLoader)
+            initPhoneServiceHooks(param.classLoader) // skip initHooks so we don't fake com.android.phone's own location requests.
         } else {
             initHooks(param.classLoader)
             if (PreferencesUtil.getHideFakeLocationToast() != true) {
@@ -53,34 +80,49 @@ class ModuleEntry : XposedModule() {
         }
     }
 
+    /**
+     * Called when system_server is starting.
+     * Only fires when the user has added `android` to the module scope to enable
+     * deep system-level location interception. Installs [SystemServicesHooks].
+     */
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         log(Log.INFO, TAG, "onSystemServerStarting: ${param.classLoader}")
         initRemotePreferences()
         initSystemHooks(param.classLoader)
     }
 
+    /** Routes [LocationUtil] and [PreferencesUtil] log calls through the libxposed logger. */
     private fun initLoggers() {
         LocationUtil.logger = { priority, tag, message -> log(priority, tag, message) }
         PreferencesUtil.logger = { priority, tag, message -> log(priority, tag, message) }
     }
 
+    /** Fetches and initializes the LSPosed remote [SharedPreferences] used by hook-side utils. */
     private fun initRemotePreferences() {
         PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
     }
 
+    /** Installs [LocationApiHooks] and [LocationManagerApiHooks] into the target app process. */
     private fun initHooks(classLoader: ClassLoader) {
         locationApiHooks = LocationApiHooks(this, classLoader).also { it.initHooks() }
         locationManagerApiHooks = LocationManagerApiHooks(this, classLoader).also { it.initHooks() }
     }
 
+    /** Installs [PhoneServicesHooks] into the `com.android.phone` process. */
     private fun initPhoneServiceHooks(classLoader: ClassLoader) {
         phoneServicesHooks = PhoneServicesHooks(this, classLoader).also { it.initHooks() }
     }
 
+    /** Installs [SystemServicesHooks] into the system_server process. */
     private fun initSystemHooks(classLoader: ClassLoader) {
         systemServicesHooks = SystemServicesHooks(this, classLoader).also { it.initHooks() }
     }
 
+    /**
+     * Hooks [android.app.Instrumentation.callApplicationOnCreate] to show a short toast
+     * in the target app once its [Application] context is available.
+     * Only installed when the "hide toast" preference is not set.
+     */
     private fun showActiveToast(param: PackageReadyParam) {
         val clazz = Class.forName("android.app.Instrumentation", false, param.classLoader)
         val method = clazz.getDeclaredMethod("callApplicationOnCreate", Application::class.java)

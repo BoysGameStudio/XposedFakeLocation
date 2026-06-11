@@ -130,7 +130,7 @@ object PreferencesUtil {
     fun getHideFakeLocationToast(): Boolean? {
         return getPreference<Boolean>(KEY_HIDE_FAKE_LOCATION_TOAST)
     }
-    
+
     fun getTargetApps(): Set<String> {
         val prefs = preferences ?: return emptySet()
         val json = prefs.getString(KEY_TARGET_APPS, null) ?: return emptySet()
