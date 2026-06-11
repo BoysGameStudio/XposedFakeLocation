@@ -28,8 +28,6 @@ object LocationUtil {
     @Volatile
     var logger: ((priority: Int, tag: String, message: String) -> Unit)? = null
     private fun log(message: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, message)
-    
-    private const val DEBUG: Boolean = false
 
     var latitude: Double = 0.0
     var longitude: Double = 0.0
@@ -148,18 +146,6 @@ object LocationUtil {
             if (PreferencesUtil.getUseSpeedAccuracy() == true) {
                 speedAccuracy = PreferencesUtil.getSpeedAccuracy()?.toFloat() ?: DEFAULT_SPEED_ACCURACY
             }
-
-            if (DEBUG) {
-                log("Updated fake location values to:")
-                log("\tCoordinates: (latitude = $latitude, longitude = $longitude)")
-                log("\tAccuracy: $accuracy")
-                log("\tAltitude: $altitude")
-                log("\tVertical Accuracy: $verticalAccuracy")
-                log("\tMean Sea Level: $meanSeaLevel")
-                log("\tMean Sea Level Accuracy: $meanSeaLevelAccuracy")
-                log("\tSpeed: $speed")
-                log("\tSpeed Accuracy: $speedAccuracy")
-            }
         }.onFailure { log("Error - ${it.message}", priority = Log.ERROR) }
     }
 
@@ -196,5 +182,21 @@ object LocationUtil {
         val finalLat = newLat.coerceIn(-90.0, 90.0)
 
         return Pair(finalLat, newLon)
+    }
+
+    /**
+     * Logs all current spoofed location values. Not called in production, but useful for debugging.
+     */
+    @Suppress("unused")
+    private fun logCurrentValues() {
+        log("Updated fake location values to:")
+        log("\tCoordinates: (latitude = $latitude, longitude = $longitude)")
+        log("\tAccuracy: $accuracy")
+        log("\tAltitude: $altitude")
+        log("\tVertical Accuracy: $verticalAccuracy")
+        log("\tMean Sea Level: $meanSeaLevel")
+        log("\tMean Sea Level Accuracy: $meanSeaLevelAccuracy")
+        log("\tSpeed: $speed")
+        log("\tSpeed Accuracy: $speedAccuracy")
     }
 }
