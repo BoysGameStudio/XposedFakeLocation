@@ -5,6 +5,7 @@ import android.util.Log
 import android.widget.Toast
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationApiHooks
+import com.noobexon.xposedfakelocation.xposed.hooks.LocationManagerApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.PhoneServicesHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.SystemServicesHooks
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
@@ -22,6 +23,7 @@ class ModuleEntry : XposedModule() {
     }
 
     private var locationApiHooks: LocationApiHooks? = null
+    private var locationManagerApiHooks: LocationManagerApiHooks? = null
     private var systemServicesHooks: SystemServicesHooks? = null
     private var phoneServicesHooks: PhoneServicesHooks? = null
 
@@ -83,6 +85,7 @@ class ModuleEntry : XposedModule() {
             }
 
             locationApiHooks = LocationApiHooks(this, param.classLoader).also { it.initHooks() }
+            locationManagerApiHooks = LocationManagerApiHooks(this, param.classLoader).also { it.initHooks() }
             result
         }
     }
