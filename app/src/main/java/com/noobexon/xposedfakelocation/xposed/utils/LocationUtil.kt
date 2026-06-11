@@ -1,4 +1,3 @@
-// LocationUtil.kt
 package com.noobexon.xposedfakelocation.xposed.utils
 
 import android.location.Location
@@ -16,8 +15,8 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.PI
 import com.noobexon.xposedfakelocation.data.RADIUS_EARTH
 import org.lsposed.hiddenapibypass.HiddenApiBypass
-import java.util.Random
 import kotlin.math.asin
+import kotlin.random.Random
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -31,8 +30,6 @@ object LocationUtil {
     private fun log(message: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, message)
     
     private const val DEBUG: Boolean = false
-
-    private val random: Random = Random()
 
     var latitude: Double = 0.0
     var longitude: Double = 0.0
@@ -109,57 +106,60 @@ object LocationUtil {
     @Synchronized
     fun updateLocation() {
         runCatching {
-            PreferencesUtil.getLastClickedLocation()?.let {
-                if (PreferencesUtil.getUseRandomize() == true) {
-                    val randomizationRadius = PreferencesUtil.getRandomizeRadius() ?: DEFAULT_RANDOMIZE_RADIUS
-                    val randomLocation = getRandomLocation(it.latitude, it.longitude, randomizationRadius)
-                    latitude = randomLocation.first
-                    longitude = randomLocation.second
-                } else {
-                    latitude = it.latitude
-                    longitude = it.longitude
-                }
+            val location = PreferencesUtil.getLastClickedLocation() ?: run {
+                log("Last clicked location is null")
+                return
+            }
 
-                if (PreferencesUtil.getUseAccuracy() == true) {
-                    accuracy = (PreferencesUtil.getAccuracy() ?: DEFAULT_ACCURACY).toFloat()
-                }
+            if (PreferencesUtil.getUseRandomize() == true) {
+                val randomizationRadius = PreferencesUtil.getRandomizeRadius() ?: DEFAULT_RANDOMIZE_RADIUS
+                val (randomLat, randomLon) = getRandomLocation(location.latitude, location.longitude, randomizationRadius)
+                latitude = randomLat
+                longitude = randomLon
+            } else {
+                latitude = location.latitude
+                longitude = location.longitude
+            }
 
-                if (PreferencesUtil.getUseAltitude() == true) {
-                    altitude = PreferencesUtil.getAltitude() ?: DEFAULT_ALTITUDE
-                }
+            if (PreferencesUtil.getUseAccuracy() == true) {
+                accuracy = (PreferencesUtil.getAccuracy() ?: DEFAULT_ACCURACY).toFloat()
+            }
 
-                if (PreferencesUtil.getUseVerticalAccuracy() == true) {
-                    verticalAccuracy = PreferencesUtil.getVerticalAccuracy()?.toFloat() ?: DEFAULT_VERTICAL_ACCURACY
-                }
+            if (PreferencesUtil.getUseAltitude() == true) {
+                altitude = PreferencesUtil.getAltitude() ?: DEFAULT_ALTITUDE
+            }
 
-                if (PreferencesUtil.getUseMeanSeaLevel() == true) {
-                    meanSeaLevel = PreferencesUtil.getMeanSeaLevel()?.toDouble() ?: DEFAULT_MEAN_SEA_LEVEL
-                }
+            if (PreferencesUtil.getUseVerticalAccuracy() == true) {
+                verticalAccuracy = PreferencesUtil.getVerticalAccuracy()?.toFloat() ?: DEFAULT_VERTICAL_ACCURACY
+            }
 
-                if (PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
-                    meanSeaLevelAccuracy = PreferencesUtil.getMeanSeaLevelAccuracy()?.toFloat() ?: DEFAULT_MEAN_SEA_LEVEL_ACCURACY
-                }
+            if (PreferencesUtil.getUseMeanSeaLevel() == true) {
+                meanSeaLevel = PreferencesUtil.getMeanSeaLevel()?.toDouble() ?: DEFAULT_MEAN_SEA_LEVEL
+            }
 
-                if (PreferencesUtil.getUseSpeed() == true) {
-                    speed = PreferencesUtil.getSpeed()?.toFloat() ?: DEFAULT_SPEED
-                }
+            if (PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
+                meanSeaLevelAccuracy = PreferencesUtil.getMeanSeaLevelAccuracy()?.toFloat() ?: DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+            }
 
-                if (PreferencesUtil.getUseSpeedAccuracy() == true) {
-                    speedAccuracy = PreferencesUtil.getSpeedAccuracy()?.toFloat() ?: DEFAULT_SPEED_ACCURACY
-                }
+            if (PreferencesUtil.getUseSpeed() == true) {
+                speed = PreferencesUtil.getSpeed()?.toFloat() ?: DEFAULT_SPEED
+            }
 
-                if (DEBUG) {
-                    log("Updated fake location values to:")
-                    log("\tCoordinates: (latitude = $latitude, longitude = $longitude)")
-                    log("\tAccuracy: $accuracy")
-                    log("\tAltitude: $altitude")
-                    log("\tVertical Accuracy: $verticalAccuracy")
-                    log("\tMean Sea Level: $meanSeaLevel")
-                    log("\tMean Sea Level Accuracy: $meanSeaLevelAccuracy")
-                    log("\tSpeed: $speed")
-                    log("\tSpeed Accuracy: $speedAccuracy")
-                }
-            } ?: log("Last clicked location is null")
+            if (PreferencesUtil.getUseSpeedAccuracy() == true) {
+                speedAccuracy = PreferencesUtil.getSpeedAccuracy()?.toFloat() ?: DEFAULT_SPEED_ACCURACY
+            }
+
+            if (DEBUG) {
+                log("Updated fake location values to:")
+                log("\tCoordinates: (latitude = $latitude, longitude = $longitude)")
+                log("\tAccuracy: $accuracy")
+                log("\tAltitude: $altitude")
+                log("\tVertical Accuracy: $verticalAccuracy")
+                log("\tMean Sea Level: $meanSeaLevel")
+                log("\tMean Sea Level Accuracy: $meanSeaLevelAccuracy")
+                log("\tSpeed: $speed")
+                log("\tSpeed Accuracy: $speedAccuracy")
+            }
         }.onFailure { log("Error - ${it.message}", priority = Log.ERROR) }
     }
 
@@ -173,11 +173,9 @@ object LocationUtil {
         val sinLat = sin(latRad)
         val cosLat = cos(latRad)
 
-        // Generate two random numbers
-        val rand1 = random.nextDouble()
-        val rand2 = random.nextDouble()
+        val rand1 = Random.nextDouble()
+        val rand2 = Random.nextDouble()
 
-        // Random distance and bearing
         val distance = radiusInRadians * sqrt(rand1)
         val bearing = 2 * PI * rand2
 
@@ -190,14 +188,11 @@ object LocationUtil {
             cosDistance - sinLat * sin(newLatRad)
         )
 
-        // Convert back to degrees
         val newLat = Math.toDegrees(newLatRad)
         var newLon = Math.toDegrees(newLonRad)
 
-        // Normalize longitude to be between -180 and 180 degrees
         newLon = ((newLon + 180) % 360 + 360) % 360 - 180
 
-        // Clamp latitude to -90 to 90 degrees
         val finalLat = newLat.coerceIn(-90.0, 90.0)
 
         return Pair(finalLat, newLon)

@@ -1,4 +1,3 @@
-// PreferencesUtil.kt
 package com.noobexon.xposedfakelocation.xposed.utils
 
 import android.content.SharedPreferences
@@ -56,81 +55,25 @@ object PreferencesUtil {
         log("Initialized with remote preferences")
     }
 
-    fun getIsPlaying(): Boolean? {
-        return getPreference<Boolean>(KEY_IS_PLAYING)
-    }
-
-    fun getLastClickedLocation(): LastClickedLocation? {
-        return getPreference<LastClickedLocation>(KEY_LAST_CLICKED_LOCATION)
-    }
-
-    fun getUseAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_ACCURACY)
-    }
-
-    fun getAccuracy(): Double? {
-        return getPreference<Double>(KEY_ACCURACY)
-    }
-
-    fun getUseAltitude(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_ALTITUDE)
-    }
-
-    fun getAltitude(): Double? {
-        return getPreference<Double>(KEY_ALTITUDE)
-    }
-
-    fun getUseRandomize(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_RANDOMIZE)
-    }
-
-    fun getRandomizeRadius(): Double? {
-        return getPreference<Double>(KEY_RANDOMIZE_RADIUS)
-    }
-
-    fun getUseVerticalAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_VERTICAL_ACCURACY)
-    }
-
-    fun getVerticalAccuracy(): Float? {
-        return getPreference<Float>(KEY_VERTICAL_ACCURACY)
-    }
-
-    fun getUseMeanSeaLevel(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_MEAN_SEA_LEVEL)
-    }
-
-    fun getMeanSeaLevel(): Double? {
-        return getPreference<Double>(KEY_MEAN_SEA_LEVEL)
-    }
-
-    fun getUseMeanSeaLevelAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_MEAN_SEA_LEVEL_ACCURACY)
-    }
-
-    fun getMeanSeaLevelAccuracy(): Float? {
-        return getPreference<Float>(KEY_MEAN_SEA_LEVEL_ACCURACY)
-    }
-
-    fun getUseSpeed(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_SPEED)
-    }
-
-    fun getSpeed(): Float? {
-        return getPreference<Float>(KEY_SPEED)
-    }
-
-    fun getUseSpeedAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_SPEED_ACCURACY)
-    }
-
-    fun getSpeedAccuracy(): Float? {
-        return getPreference<Float>(KEY_SPEED_ACCURACY)
-    }
-
-    fun getHideFakeLocationToast(): Boolean? {
-        return getPreference<Boolean>(KEY_HIDE_FAKE_LOCATION_TOAST)
-    }
+    fun getIsPlaying(): Boolean? = getPreference(KEY_IS_PLAYING)
+    fun getLastClickedLocation(): LastClickedLocation? = getPreference(KEY_LAST_CLICKED_LOCATION)
+    fun getUseAccuracy(): Boolean? = getPreference(KEY_USE_ACCURACY)
+    fun getAccuracy(): Double? = getPreference(KEY_ACCURACY)
+    fun getUseAltitude(): Boolean? = getPreference(KEY_USE_ALTITUDE)
+    fun getAltitude(): Double? = getPreference(KEY_ALTITUDE)
+    fun getUseRandomize(): Boolean? = getPreference(KEY_USE_RANDOMIZE)
+    fun getRandomizeRadius(): Double? = getPreference(KEY_RANDOMIZE_RADIUS)
+    fun getUseVerticalAccuracy(): Boolean? = getPreference(KEY_USE_VERTICAL_ACCURACY)
+    fun getVerticalAccuracy(): Float? = getPreference(KEY_VERTICAL_ACCURACY)
+    fun getUseMeanSeaLevel(): Boolean? = getPreference(KEY_USE_MEAN_SEA_LEVEL)
+    fun getMeanSeaLevel(): Double? = getPreference(KEY_MEAN_SEA_LEVEL)
+    fun getUseMeanSeaLevelAccuracy(): Boolean? = getPreference(KEY_USE_MEAN_SEA_LEVEL_ACCURACY)
+    fun getMeanSeaLevelAccuracy(): Float? = getPreference(KEY_MEAN_SEA_LEVEL_ACCURACY)
+    fun getUseSpeed(): Boolean? = getPreference(KEY_USE_SPEED)
+    fun getSpeed(): Float? = getPreference(KEY_SPEED)
+    fun getUseSpeedAccuracy(): Boolean? = getPreference(KEY_USE_SPEED_ACCURACY)
+    fun getSpeedAccuracy(): Float? = getPreference(KEY_SPEED_ACCURACY)
+    fun getHideFakeLocationToast(): Boolean? = getPreference(KEY_HIDE_FAKE_LOCATION_TOAST)
 
     fun getTargetApps(): Set<String> {
         val prefs = preferences ?: return emptySet()
