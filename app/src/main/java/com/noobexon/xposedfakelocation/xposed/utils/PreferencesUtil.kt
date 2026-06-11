@@ -130,9 +130,7 @@ object PreferencesUtil {
     fun getHideFakeLocationToast(): Boolean? {
         return getPreference<Boolean>(KEY_HIDE_FAKE_LOCATION_TOAST)
     }
-
-    // Mirrors the manager-side scope selection. Stored by PreferencesRepository as a JSON array
-    // of package names, so it must be parsed the same way here (not via the generic getPreference).
+    
     fun getTargetApps(): Set<String> {
         val prefs = preferences ?: return emptySet()
         val json = prefs.getString(KEY_TARGET_APPS, null) ?: return emptySet()
