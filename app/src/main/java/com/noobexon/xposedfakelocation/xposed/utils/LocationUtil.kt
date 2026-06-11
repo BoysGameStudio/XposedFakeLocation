@@ -14,6 +14,10 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.PI
 import com.noobexon.xposedfakelocation.data.RADIUS_EARTH
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.attemptHideMockProvider
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.createFakeLocation
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.log
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.updateLocation
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import kotlin.math.asin
 import kotlin.math.atan2

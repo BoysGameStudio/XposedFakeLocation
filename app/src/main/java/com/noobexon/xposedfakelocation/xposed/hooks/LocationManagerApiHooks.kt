@@ -44,12 +44,12 @@ class LocationManagerApiHooks(
                 val provider = chain.getArg(0) as String
                 val original = chain.proceed() as? Location
                 module.log(Log.INFO, tag, "Leaving method getLastKnownLocation(provider)")
-                module.log(Log.INFO, tag, "\t Requested data from: $provider")
-                module.log(Log.INFO, tag, "\t Original location: $original")
+                module.log(Log.INFO, tag, "\tRequested data from: $provider")
+                module.log(Log.INFO, tag, "\tOriginal location: $original")
                 if (PreferencesUtil.getIsPlaying() == true) {
                     LocationUtil.updateLocation()
                     val fakeLocation = LocationUtil.createFakeLocation(provider = provider)
-                    module.log(Log.INFO, tag, "\t Modified location: $fakeLocation")
+                    module.log(Log.INFO, tag, "\tModified location: $fakeLocation")
                     fakeLocation
                 } else {
                     original

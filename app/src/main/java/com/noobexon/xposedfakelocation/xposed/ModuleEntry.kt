@@ -1,10 +1,8 @@
 package com.noobexon.xposedfakelocation.xposed
 
 import android.app.Application
-import android.os.Build
 import android.util.Log
 import android.widget.Toast
-import androidx.annotation.RequiresApi
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationManagerApiHooks
@@ -120,7 +118,6 @@ class ModuleEntry : XposedModule() {
     /**
      * Hooks [android.app.Instrumentation.callApplicationOnCreate] to show a short toast
      * in the target app once its [Application] context is available.
-     * Only installed when the "hide toast" preference is not set.
      */
     private fun showActiveToast(param: PackageReadyParam) {
         val clazz = Class.forName("android.app.Instrumentation", false, param.classLoader)

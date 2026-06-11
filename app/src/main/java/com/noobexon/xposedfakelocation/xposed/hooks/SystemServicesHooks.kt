@@ -8,7 +8,6 @@ import android.os.Build
 import android.telephony.CellInfo
 import android.util.ArrayMap
 import android.util.Log
-import androidx.annotation.RequiresApi
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import dalvik.system.PathClassLoader
