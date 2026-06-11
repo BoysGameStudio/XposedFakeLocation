@@ -3,7 +3,6 @@ package com.noobexon.xposedfakelocation.xposed.hooks
 import android.telephony.CellInfo
 import android.telephony.NeighboringCellInfo
 import android.util.Log
-import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Hooker
@@ -15,7 +14,7 @@ class PhoneServicesHooks(
 ) {
     private val tag = "[PhoneServicesHooks]"
 
-    fun initHooks() {
+    fun init() {
         val phoneInterfaceManagerClass = findClass(
             classLoader,
             "com.android.phone.PhoneInterfaceManager"

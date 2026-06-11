@@ -1,8 +1,10 @@
 package com.noobexon.xposedfakelocation.xposed
 
 import android.app.Application
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationManagerApiHooks
@@ -101,18 +103,18 @@ class ModuleEntry : XposedModule() {
 
     /** Installs [LocationApiHooks] and [LocationManagerApiHooks] into the target app process. */
     private fun initHooks(classLoader: ClassLoader) {
-        LocationApiHooks(this, classLoader).initHooks()
-        LocationManagerApiHooks(this, classLoader).initHooks()
+        LocationApiHooks(this, classLoader).init()
+        LocationManagerApiHooks(this, classLoader).init()
     }
 
     /** Installs [PhoneServicesHooks] into the `com.android.phone` process. */
     private fun initPhoneServiceHooks(classLoader: ClassLoader) {
-        PhoneServicesHooks(this, classLoader).initHooks()
+        PhoneServicesHooks(this, classLoader).init()
     }
 
     /** Installs [SystemServicesHooks] into the system_server process. */
     private fun initSystemHooks(classLoader: ClassLoader) {
-        SystemServicesHooks(this, classLoader).initHooks()
+        SystemServicesHooks(this, classLoader).init()
     }
 
     /**

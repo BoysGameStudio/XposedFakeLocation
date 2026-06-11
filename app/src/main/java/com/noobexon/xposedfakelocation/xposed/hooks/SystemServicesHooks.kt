@@ -24,7 +24,7 @@ class SystemServicesHooks(
 ) {
     private val tag = "[SystemServicesHooks]"
 
-    fun initHooks() {
+    fun init() {
         hookLastLocation(classLoader)
         hookCurrentLocation(classLoader)
         hookLocationDispatch(classLoader)
@@ -272,7 +272,6 @@ class SystemServicesHooks(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.R)
     private fun hookWifiServiceImpl(wifiServiceClass: Class<*>) {
         hookAll(wifiServiceClass, "getScanResults") { chain ->
             val result = chain.proceed()

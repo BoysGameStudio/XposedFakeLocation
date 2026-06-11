@@ -12,7 +12,7 @@ class LocationManagerApiHooks(
 ) {
     private val tag = "[LocationManagerApiHooks]"
 
-    fun initHooks() {
+    fun init() {
         hookLocationManager()
         module.log(Log.INFO, tag, "Instantiated hooks successfully")
     }
