@@ -16,6 +16,8 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 
+private const val TAG = "[ModuleEntry]"
+
 /**
  * Entry point for the Xposed module, loaded by LSPosed into every process in scope.
  *
@@ -27,10 +29,7 @@ import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
  *   - `android` (system_server, when opted in) → [SystemServicesHooks].
  */
 class ModuleEntry : XposedModule() {
-    companion object {
-        const val TAG = "[ModuleEntry]"
-    }
-
+    
     private var locationApiHooks: LocationApiHooks? = null
     private var locationManagerApiHooks: LocationManagerApiHooks? = null
     private var systemServicesHooks: SystemServicesHooks? = null
@@ -74,7 +73,11 @@ class ModuleEntry : XposedModule() {
             initPhoneServiceHooks(param.classLoader) 
         } else {
             initHooks(param.classLoader)
-            if (PreferencesUtil.getHideFakeLocationToast() != true) showActiveToast(param)
+
+            val result = PreferencesUtil.getHideFakeLocationToast()
+            if (result == null || result == false) {
+                showActiveToast(param)
+            }
         }
     }
 
@@ -91,8 +94,9 @@ class ModuleEntry : XposedModule() {
 
     /** Routes [LocationUtil] and [PreferencesUtil] log calls through the libxposed logger. */
     private fun initLoggers() {
-        LocationUtil.logger = { priority, tag, message -> log(priority, tag, message) }
-        PreferencesUtil.logger = { priority, tag, message -> log(priority, tag, message) }
+        val logger: (Int, String, String) -> Unit = { priority, tag, message -> log(priority, tag, message) }
+        LocationUtil.logger = logger
+        PreferencesUtil.logger = logger
     }
 
     /** Fetches and initializes the LSPosed remote [SharedPreferences] used by hook-side utils. */
@@ -126,13 +130,11 @@ class ModuleEntry : XposedModule() {
         val method = clazz.getDeclaredMethod("callApplicationOnCreate", Application::class.java)
         hook(method).intercept { chain ->
             val result = chain.proceed()
-            try {
+            runCatching {
                 val context = (chain.getArg(0) as Application).applicationContext
                 log(Log.INFO, TAG, "Target App's context has been acquired (${param.packageName}).")
                 Toast.makeText(context, "Fake Location Is Active!", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                log(Log.ERROR, TAG, "Toast/context failed - ${e.message}")
-            }
+            }.onFailure { log(Log.ERROR, TAG, "Toast/context failed - ${it.message}") }
             result
         }
     }
