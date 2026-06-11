@@ -37,6 +37,7 @@ import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
 
 object PreferencesUtil {
     private const val TAG = "[PreferencesUtil]"
+    private val gson = Gson()
 
     @Volatile var logger: ((Int, String, String) -> Unit)? = null
     private fun log(msg: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, msg)
@@ -134,13 +135,11 @@ object PreferencesUtil {
     fun getTargetApps(): Set<String> {
         val prefs = preferences ?: return emptySet()
         val json = prefs.getString(KEY_TARGET_APPS, null) ?: return emptySet()
-        return try {
+        return runCatching {
             val type = object : TypeToken<List<String>>() {}.type
-            Gson().fromJson<List<String>?>(json, type)?.toSet() ?: emptySet()
-        } catch (e: Exception) {
-            log("Error parsing $KEY_TARGET_APPS JSON: ${e.message}", Log.ERROR)
-            emptySet()
-        }
+            gson.fromJson<List<String>?>(json, type)?.toSet() ?: emptySet()
+        }.onFailure { log("Error parsing $KEY_TARGET_APPS JSON: ${it.message}", Log.ERROR) }
+            .getOrDefault(emptySet())
     }
 
     private inline fun <reified T> getPreference(key: String): T? {
@@ -169,20 +168,10 @@ object PreferencesUtil {
             }
             Boolean::class -> preferences.getBoolean(key, false) as? T
             else -> {
-                val json = preferences.getString(key, null)
-                if (json != null) {
-                    try {
-                        Gson().fromJson(json, T::class.java).also {
-                            log("Retrieved $key: $it")
-                        }
-                    } catch (e: Exception) {
-                        log("Error parsing $key JSON: ${e.message}")
-                        null
-                    }
-                } else {
-                    log("$key not found in preferences.")
-                    null
-                }
+                val json = preferences.getString(key, null) ?: return null.also { log("$key not found in preferences.") }
+                runCatching { gson.fromJson(json, T::class.java).also { log("Retrieved $key: $it") } }
+                    .onFailure { log("Error parsing $key JSON: ${it.message}") }
+                    .getOrNull()
             }
         }
     }
