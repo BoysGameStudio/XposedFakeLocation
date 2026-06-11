@@ -100,17 +100,15 @@ object LocationUtil {
     }
 
     private fun attemptHideMockProvider(fakeLocation: Location) {
-        try {
+        runCatching {
             HiddenApiBypass.invoke(fakeLocation.javaClass, fakeLocation, "setIsFromMockProvider", false)
             log("invoked hidden API - setIsFromMockProvider: false)")
-        } catch (e: Exception) {
-            log("Not possible to mock - ${e.message}", priority = Log.ERROR)
-        }
+        }.onFailure { log("Not possible to mock - ${it.message}", priority = Log.ERROR) }
     }
 
     @Synchronized
     fun updateLocation() {
-        try {
+        runCatching {
             PreferencesUtil.getLastClickedLocation()?.let {
                 if (PreferencesUtil.getUseRandomize() == true) {
                     val randomizationRadius = PreferencesUtil.getRandomizeRadius() ?: DEFAULT_RANDOMIZE_RADIUS
@@ -162,9 +160,7 @@ object LocationUtil {
                     log("\tSpeed Accuracy: $speedAccuracy")
                 }
             } ?: log("Last clicked location is null")
-        } catch (e: Exception) {
-            log("Error - ${e.message}", priority = Log.ERROR)
-        }
+        }.onFailure { log("Error - ${it.message}", priority = Log.ERROR) }
     }
 
     // Calculates a random point within a circle around the fake location that has the radius set by by the user. Uses Haversine's formula.
