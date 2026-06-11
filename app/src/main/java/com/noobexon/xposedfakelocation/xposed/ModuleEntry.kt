@@ -70,7 +70,7 @@ class ModuleEntry : XposedModule() {
             initHooks(param.classLoader)
 
             val result = PreferencesUtil.getHideFakeLocationToast()
-            if (result == null || result == false) {
+            if (result == null || !result) {
                 showActiveToast(param)
             }
         }
