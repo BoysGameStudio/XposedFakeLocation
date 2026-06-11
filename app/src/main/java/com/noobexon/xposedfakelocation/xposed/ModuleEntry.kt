@@ -28,12 +28,12 @@ class ModuleEntry : XposedModule() {
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         log(Log.INFO, TAG, "onModuleLoaded: ${param.processName}")
-        initUtilsLoggers()
+        initLoggers()
     }
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
         log(Log.INFO, TAG, "onPackageLoaded: ${param.packageName}")
-        PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
+        initRemotePreferences()
     }
 
     override fun onPackageReady(param: PackageReadyParam) {
@@ -55,17 +55,17 @@ class ModuleEntry : XposedModule() {
 
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         log(Log.INFO, TAG, "onSystemServerStarting: ${param.classLoader}")
-
-        // system_server is a hooked process only when the user enabled system-level hooks (which adds
-        // "android" to the module scope). Per-intercept isPlaying + target_apps gating keeps these
-        // inert until the user is actively spoofing a selected target.
-        PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
+        initRemotePreferences()
         initSystemHooks(param.classLoader)
     }
 
-    private fun initUtilsLoggers() {
+    private fun initLoggers() {
         LocationUtil.logger = { priority, tag, message -> log(priority, tag, message) }
         PreferencesUtil.logger = { priority, tag, message -> log(priority, tag, message) }
+    }
+
+    private fun initRemotePreferences() {
+        PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
     }
 
     private fun initHooks(classLoader: ClassLoader) {

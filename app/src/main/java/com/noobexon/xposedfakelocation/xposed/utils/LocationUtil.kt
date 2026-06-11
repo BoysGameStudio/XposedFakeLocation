@@ -28,11 +28,8 @@ object LocationUtil {
 
     @Volatile
     var logger: ((priority: Int, tag: String, message: String) -> Unit)? = null
-
-    private fun log(message: String, priority: Int = Log.INFO) {
-        logger?.invoke(priority, TAG, message)
-    }
-
+    private fun log(message: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, message)
+    
     private const val DEBUG: Boolean = false
 
     private val random: Random = Random()
