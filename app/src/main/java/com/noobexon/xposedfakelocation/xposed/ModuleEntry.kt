@@ -71,7 +71,7 @@ class ModuleEntry : XposedModule() {
         if (!param.isFirstPackage) return // Run per-package setup only once.
 
         if (param.packageName == "com.android.phone") {
-            initPhoneServiceHooks(param.classLoader) // skip initHooks so we don't fake com.android.phone's own location requests.
+            initPhoneServiceHooks(param.classLoader) 
         } else {
             initHooks(param.classLoader)
             if (PreferencesUtil.getHideFakeLocationToast() != true) {
