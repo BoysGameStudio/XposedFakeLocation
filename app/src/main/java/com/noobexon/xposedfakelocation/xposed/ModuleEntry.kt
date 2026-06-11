@@ -35,16 +35,12 @@ class ModuleEntry : XposedModule() {
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
         log(Log.INFO, TAG, "onPackageLoaded: ${param.packageName}")
-        log(Log.INFO, TAG, "\tdefault classloder: ${param.defaultClassLoader}")
     }
 
     override fun onPackageReady(param: PackageReadyParam) {
         log(Log.INFO, TAG, "onPackageReady: ${param.packageName}")
-        log(Log.INFO, TAG, "\tapp classloder: ${param.classLoader}")
-        log(Log.INFO, TAG, "\tmodule apk path: ${moduleApplicationInfo.sourceDir}")
 
-        // Run per-package setup only once.
-        if (!param.isFirstPackage) return
+        if (!param.isFirstPackage) return // Run per-package setup only once.
 
         PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
 
@@ -53,12 +49,15 @@ class ModuleEntry : XposedModule() {
             // skip LocationApiHooks so we don't fake com.android.phone's own location requests.
             phoneServicesHooks = PhoneServicesHooks(this, param.classLoader).also { it.initHooks() }
         } else {
-            initHookingLogic(param)
+            initHooks(param.classLoader)
+            if (PreferencesUtil.getHideFakeLocationToast() != true) {
+                showActiveToast(param)
+            }
         }
     }
 
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
-        log(Log.INFO, TAG, "onSystemServerStarting:\n\t${param.classLoader}")
+        log(Log.INFO, TAG, "onSystemServerStarting: ${param.classLoader}")
 
         // system_server is a hooked process only when the user enabled system-level hooks (which adds
         // "android" to the module scope). Per-intercept isPlaying + target_apps gating keeps these
@@ -67,7 +66,12 @@ class ModuleEntry : XposedModule() {
         systemServicesHooks = SystemServicesHooks(this, param.classLoader).also { it.initHooks() }
     }
 
-    private fun initHookingLogic(param: PackageReadyParam) {
+    private fun initHooks(classLoader: ClassLoader) {
+        locationApiHooks = LocationApiHooks(this, classLoader).also { it.initHooks() }
+        locationManagerApiHooks = LocationManagerApiHooks(this, classLoader).also { it.initHooks() }
+    }
+
+    private fun showActiveToast(param: PackageReadyParam) {
         val clazz = Class.forName("android.app.Instrumentation", false, param.classLoader)
         val method = clazz.getDeclaredMethod("callApplicationOnCreate", Application::class.java)
 
@@ -77,15 +81,11 @@ class ModuleEntry : XposedModule() {
             try {
                 val context = (chain.getArg(0) as Application).applicationContext
                 log(Log.INFO, TAG, "Target App's context has been acquired (${param.packageName}).")
-                if (PreferencesUtil.getHideFakeLocationToast() != true) {
-                    Toast.makeText(context, "Fake Location Is Active!", Toast.LENGTH_SHORT).show()
-                }
+                Toast.makeText(context, "Fake Location Is Active!", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 log(Log.ERROR, TAG, "Toast/context failed - ${e.message}")
             }
 
-            locationApiHooks = LocationApiHooks(this, param.classLoader).also { it.initHooks() }
-            locationManagerApiHooks = LocationManagerApiHooks(this, param.classLoader).also { it.initHooks() }
             result
         }
     }
