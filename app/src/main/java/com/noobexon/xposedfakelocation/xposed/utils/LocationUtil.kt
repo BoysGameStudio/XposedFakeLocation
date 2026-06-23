@@ -1,4 +1,3 @@
-// LocationUtil.kt
 package com.noobexon.xposedfakelocation.xposed.utils
 
 import android.location.Location
@@ -15,38 +14,82 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.PI
 import com.noobexon.xposedfakelocation.data.RADIUS_EARTH
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.attemptHideMockProvider
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.createFakeLocation
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.log
+import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil.updateLocation
 import org.lsposed.hiddenapibypass.HiddenApiBypass
-import java.util.Random
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.random.Random
 
+/**
+ * Singleton holding the current spoofed location state and utilities for building
+ * fake [Location] objects.
+ *
+ * All mutable fields are updated exclusively by [updateLocation], which pulls the
+ * latest values from [PreferencesUtil] on every call. External callers (hooks) read
+ * the fields but cannot write them directly.
+ */
 object LocationUtil {
     private const val TAG = "[LocationUtil]"
 
+    /**
+     * Optional logger wired in by [com.noobexon.xposedfakelocation.xposed.ModuleEntry].
+     * When set, all [log] calls are routed through the libxposed logging channel.
+     * Must be `@Volatile` because it is written from one thread and read from many.
+     */
     @Volatile
     var logger: ((priority: Int, tag: String, message: String) -> Unit)? = null
+    private fun log(message: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, message)
 
-    private fun log(message: String, priority: Int = Log.INFO) {
-        logger?.invoke(priority, TAG, message)
-    }
-
-    private const val DEBUG: Boolean = false
-
-    private val random: Random = Random()
-
+    /** Current spoofed latitude in decimal degrees. Updated by [updateLocation]. */
     var latitude: Double = 0.0
+        private set
+    /** Current spoofed longitude in decimal degrees. Updated by [updateLocation]. */
     var longitude: Double = 0.0
+        private set
+    /** Current spoofed horizontal accuracy in metres. Zero means "not overridden". */
     var accuracy: Float = 0F
+        private set
+    /** Current spoofed altitude in metres above WGS-84. Zero means "not overridden". */
     var altitude: Double = 0.0
+        private set
+    /** Current spoofed vertical accuracy in metres. Zero means "not overridden". */
     var verticalAccuracy: Float = 0F
+        private set
+    /** Current spoofed MSL altitude in metres (API 34+). Zero means "not overridden". */
     var meanSeaLevel: Double = 0.0
+        private set
+    /** Current spoofed MSL altitude accuracy in metres (API 34+). Zero means "not overridden". */
     var meanSeaLevelAccuracy: Float = 0F
+        private set
+    /** Current spoofed ground speed in m/s. Zero means "not overridden". */
     var speed: Float = 0F
+        private set
+    /** Current spoofed speed accuracy in m/s. Zero means "not overridden". */
     var speedAccuracy: Float = 0F
+        private set
 
+    /**
+     * Builds a [Location] object populated with the current spoofed field values.
+     *
+     * If [originalLocation] is provided its metadata (time, bearing, elapsed realtime, etc.)
+     * is preserved; otherwise a fresh [Location] is created with a slightly backdated timestamp
+     * to satisfy recency checks in some apps.
+     *
+     * Only non-zero spoofed fields are applied, so unset optional fields fall back to whatever
+     * the [originalLocation] carried. The mock-provider flag is cleared via [attemptHideMockProvider].
+     *
+     * This method is `@Synchronized` to prevent reading partially-updated fields if
+     * [updateLocation] is called concurrently.
+     *
+     * @param originalLocation Optional real location whose metadata is copied into the result.
+     * @param provider Location provider string written into the returned [Location].
+     */
     @Synchronized
     fun createFakeLocation(originalLocation: Location? = null, provider: String = LocationManager.GPS_PROVIDER): Location {
         val fakeLocation = if (originalLocation == null) {
@@ -102,82 +145,73 @@ object LocationUtil {
         return fakeLocation
     }
 
-    // Name-based scope attribution for the system-level hooks: a package is spoofed only when it is
-    // one of the manager-selected target apps (mirrored into the remote `target_apps` preference).
-    fun shouldSpoofPackage(packageName: String?): Boolean {
-        if (packageName.isNullOrBlank()) return false
-        return PreferencesUtil.getTargetApps().contains(packageName)
-    }
-
-    private fun attemptHideMockProvider(fakeLocation: Location) {
-        try {
-            HiddenApiBypass.invoke(fakeLocation.javaClass, fakeLocation, "setIsFromMockProvider", false)
-            log("invoked hidden API - setIsFromMockProvider: false)")
-        } catch (e: Exception) {
-            log("Not possible to mock - ${e.message}", priority = Log.ERROR)
-        }
-    }
-
+    /**
+     * Reads the latest spoofed location settings from [PreferencesUtil] and updates all
+     * mutable fields on this object.
+     *
+     * Coordinates are either taken directly from the last clicked location or randomized
+     * within a user-configured radius using the Haversine formula. Optional fields
+     * (accuracy, altitude, speed, etc.) are only updated when their corresponding
+     * "use" flag is enabled in preferences.
+     *
+     * This method is `@Synchronized` to guarantee that [createFakeLocation] always sees a
+     * consistent snapshot even when called from a different thread.
+     */
     @Synchronized
     fun updateLocation() {
-        try {
-            PreferencesUtil.getLastClickedLocation()?.let {
-                if (PreferencesUtil.getUseRandomize() == true) {
-                    val randomizationRadius = PreferencesUtil.getRandomizeRadius() ?: DEFAULT_RANDOMIZE_RADIUS
-                    val randomLocation = getRandomLocation(it.latitude, it.longitude, randomizationRadius)
-                    latitude = randomLocation.first
-                    longitude = randomLocation.second
-                } else {
-                    latitude = it.latitude
-                    longitude = it.longitude
-                }
+        runCatching {
+            val location = PreferencesUtil.getLastClickedLocation() ?: run {
+                log("Last clicked location is null")
+                return
+            }
 
-                if (PreferencesUtil.getUseAccuracy() == true) {
-                    accuracy = (PreferencesUtil.getAccuracy() ?: DEFAULT_ACCURACY).toFloat()
-                }
+            if (PreferencesUtil.getUseRandomize() == true) {
+                val randomizationRadius = PreferencesUtil.getRandomizeRadius() ?: DEFAULT_RANDOMIZE_RADIUS
+                val (randomLat, randomLon) = getRandomLocation(location.latitude, location.longitude, randomizationRadius)
+                latitude = randomLat
+                longitude = randomLon
+            } else {
+                latitude = location.latitude
+                longitude = location.longitude
+            }
 
-                if (PreferencesUtil.getUseAltitude() == true) {
-                    altitude = PreferencesUtil.getAltitude() ?: DEFAULT_ALTITUDE
-                }
+            if (PreferencesUtil.getUseAccuracy() == true) {
+                accuracy = (PreferencesUtil.getAccuracy() ?: DEFAULT_ACCURACY).toFloat()
+            }
 
-                if (PreferencesUtil.getUseVerticalAccuracy() == true) {
-                    verticalAccuracy = PreferencesUtil.getVerticalAccuracy()?.toFloat() ?: DEFAULT_VERTICAL_ACCURACY
-                }
+            if (PreferencesUtil.getUseAltitude() == true) {
+                altitude = PreferencesUtil.getAltitude() ?: DEFAULT_ALTITUDE
+            }
 
-                if (PreferencesUtil.getUseMeanSeaLevel() == true) {
-                    meanSeaLevel = PreferencesUtil.getMeanSeaLevel()?.toDouble() ?: DEFAULT_MEAN_SEA_LEVEL
-                }
+            if (PreferencesUtil.getUseVerticalAccuracy() == true) {
+                verticalAccuracy = PreferencesUtil.getVerticalAccuracy() ?: DEFAULT_VERTICAL_ACCURACY
+            }
 
-                if (PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
-                    meanSeaLevelAccuracy = PreferencesUtil.getMeanSeaLevelAccuracy()?.toFloat() ?: DEFAULT_MEAN_SEA_LEVEL_ACCURACY
-                }
+            if (PreferencesUtil.getUseMeanSeaLevel() == true) {
+                meanSeaLevel = PreferencesUtil.getMeanSeaLevel() ?: DEFAULT_MEAN_SEA_LEVEL
+            }
 
-                if (PreferencesUtil.getUseSpeed() == true) {
-                    speed = PreferencesUtil.getSpeed()?.toFloat() ?: DEFAULT_SPEED
-                }
+            if (PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
+                meanSeaLevelAccuracy = PreferencesUtil.getMeanSeaLevelAccuracy() ?: DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+            }
 
-                if (PreferencesUtil.getUseSpeedAccuracy() == true) {
-                    speedAccuracy = PreferencesUtil.getSpeedAccuracy()?.toFloat() ?: DEFAULT_SPEED_ACCURACY
-                }
+            if (PreferencesUtil.getUseSpeed() == true) {
+                speed = PreferencesUtil.getSpeed() ?: DEFAULT_SPEED
+            }
 
-                if (DEBUG) {
-                    log("Updated fake location values to:")
-                    log("\tCoordinates: (latitude = $latitude, longitude = $longitude)")
-                    log("\tAccuracy: $accuracy")
-                    log("\tAltitude: $altitude")
-                    log("\tVertical Accuracy: $verticalAccuracy")
-                    log("\tMean Sea Level: $meanSeaLevel")
-                    log("\tMean Sea Level Accuracy: $meanSeaLevelAccuracy")
-                    log("\tSpeed: $speed")
-                    log("\tSpeed Accuracy: $speedAccuracy")
-                }
-            } ?: log("Last clicked location is null")
-        } catch (e: Exception) {
-            log("Error - ${e.message}", priority = Log.ERROR)
-        }
+            if (PreferencesUtil.getUseSpeedAccuracy() == true) {
+                speedAccuracy = PreferencesUtil.getSpeedAccuracy() ?: DEFAULT_SPEED_ACCURACY
+            }
+        }.onFailure { log("Error - ${it.message}", priority = Log.ERROR) }
     }
 
-    // Calculates a random point within a circle around the fake location that has the radius set by by the user. Uses Haversine's formula.
+    /**
+     * Calculates a uniformly distributed random point within a circle of [radiusInMeters]
+     * centred at ([lat], [lon]) using the Haversine formula.
+     *
+     * @return A [Pair] of (latitude, longitude) in decimal degrees, clamped/normalised
+     *         to valid WGS-84 ranges.
+     */
     private fun getRandomLocation(lat: Double, lon: Double, radiusInMeters: Double): Pair<Double, Double> {
         val radiusInRadians = radiusInMeters / RADIUS_EARTH
 
@@ -187,11 +221,9 @@ object LocationUtil {
         val sinLat = sin(latRad)
         val cosLat = cos(latRad)
 
-        // Generate two random numbers
-        val rand1 = random.nextDouble()
-        val rand2 = random.nextDouble()
+        val rand1 = Random.nextDouble()
+        val rand2 = Random.nextDouble()
 
-        // Random distance and bearing
         val distance = radiusInRadians * sqrt(rand1)
         val bearing = 2 * PI * rand2
 
@@ -204,16 +236,43 @@ object LocationUtil {
             cosDistance - sinLat * sin(newLatRad)
         )
 
-        // Convert back to degrees
         val newLat = Math.toDegrees(newLatRad)
         var newLon = Math.toDegrees(newLonRad)
 
-        // Normalize longitude to be between -180 and 180 degrees
         newLon = ((newLon + 180) % 360 + 360) % 360 - 180
 
-        // Clamp latitude to -90 to 90 degrees
         val finalLat = newLat.coerceIn(-90.0, 90.0)
 
         return Pair(finalLat, newLon)
+    }
+
+    /**
+     * Attempts to clear the mock-provider flag on [fakeLocation] via the hidden API
+     * `Location.setIsFromMockProvider(false)`, bypassed using [HiddenApiBypass].
+     *
+     * Failure is logged but silently swallowed — some ROM variants or future API levels
+     * may block this call, in which case spoofing still works but the mock flag remains set.
+     */
+    private fun attemptHideMockProvider(fakeLocation: Location) {
+        runCatching {
+            HiddenApiBypass.invoke(fakeLocation.javaClass, fakeLocation, "setIsFromMockProvider", false)
+            log("invoked hidden API - setIsFromMockProvider: false)")
+        }.onFailure { log("Not possible to mock - ${it.message}", priority = Log.ERROR) }
+    }
+
+    /**
+     * Logs all current spoofed location values. Not called in production, but useful for debugging.
+     */
+    @Suppress("unused")
+    private fun logCurrentValues() {
+        log("Updated fake location values to:")
+        log("\tCoordinates: (latitude = $latitude, longitude = $longitude)")
+        log("\tAccuracy: $accuracy")
+        log("\tAltitude: $altitude")
+        log("\tVertical Accuracy: $verticalAccuracy")
+        log("\tMean Sea Level: $meanSeaLevel")
+        log("\tMean Sea Level Accuracy: $meanSeaLevelAccuracy")
+        log("\tSpeed: $speed")
+        log("\tSpeed Accuracy: $speedAccuracy")
     }
 }

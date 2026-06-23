@@ -23,7 +23,7 @@ class SystemServicesHooks(
 ) {
     private val tag = "[SystemServicesHooks]"
 
-    fun initHooks() {
+    fun init() {
         hookLastLocation(classLoader)
         hookCurrentLocation(classLoader)
         hookLocationDispatch(classLoader)
@@ -104,7 +104,7 @@ class SystemServicesHooks(
         registrations.forEach { (key, value) ->
             originalRegistrations[key] = value
             val packageNames = collectPackageNames(value)
-            val spoofedPackage = packageNames.firstOrNull(LocationUtil::shouldSpoofPackage)
+            val spoofedPackage = packageNames.firstOrNull { shouldSpoofPackage(it) }
             if (spoofedPackage != null) {
                 // Deliver a fake location directly to this target registration and exclude it from
                 // the passthrough set so the real location is never pushed to it below.
@@ -193,7 +193,7 @@ class SystemServicesHooks(
     private fun interceptCallLocationChanged(chain: Chain): Any? {
         if (PreferencesUtil.getIsPlaying() != true) return chain.proceed()
         // The Receiver itself carries the caller package, so attribute by inspecting `thisObject`.
-        if (collectPackageNames(chain.thisObject).none(LocationUtil::shouldSpoofPackage)) return chain.proceed()
+        if (collectPackageNames(chain.thisObject).none { shouldSpoofPackage(it) }) return chain.proceed()
 
         val args = chain.args
         val locationArgIndex = args.indexOfFirst { it is Location }
@@ -204,6 +204,13 @@ class SystemServicesHooks(
         newArgs[locationArgIndex] = LocationUtil.createFakeLocation(original)
         module.log(Log.INFO, tag, "Replaced Receiver.callLocationChangedLocked argument.")
         return chain.proceed(newArgs)
+    }
+
+    // Name-based scope attribution for the system-level hooks: a package is spoofed only when it is
+    // one of the manager-selected target apps (mirrored into the remote `target_apps` preference).
+    private fun shouldSpoofPackage(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        return PreferencesUtil.getTargetApps().contains(packageName)
     }
 
     private fun hookGnssRegistration(classLoader: ClassLoader) {
@@ -396,7 +403,7 @@ class SystemServicesHooks(
         return args?.asSequence()
             ?.flatMap { collectPackageNames(it).asSequence() }
             ?.distinct()
-            ?.any(LocationUtil::shouldSpoofPackage) == true
+            ?.any { shouldSpoofPackage(it) } == true
     }
 
     private fun collectPackageNames(value: Any?): Set<String> {

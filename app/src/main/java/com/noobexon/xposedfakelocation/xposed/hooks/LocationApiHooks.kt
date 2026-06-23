@@ -1,175 +1,84 @@
 package com.noobexon.xposedfakelocation.xposed.hooks
 
-import android.location.Location
 import android.os.Build
 import android.util.Log
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
 
-// TODO: in all hooks, we should check every 3 seconds if we are still in scope. isPlaying is not enough.
-
+/**
+ * Installs hooks on the public `android.location.Location` getter methods to intercept
+ * and replace individual location fields with spoofed values.
+ *
+ * Each hook calls [LocationUtil.updateLocation] to refresh the current spoofed state from
+ * preferences, then returns the spoofed value when [PreferencesUtil.getIsPlaying] is `true`
+ * and the field's optional "use" toggle is enabled.
+ *
+ * MSL altitude hooks are only installed on API 34+ ([Build.VERSION_CODES.UPSIDE_DOWN_CAKE]).
+ */
 class LocationApiHooks(private val module: XposedInterface, private val classLoader: ClassLoader) {
     private val tag = "[LocationApiHooks]"
 
-    fun initHooks() {
+    /** Installs all `android.location.Location` getter hooks. */
+    fun init() {
         hookLocation()
-        hookLocationManager()
         module.log(Log.INFO, tag, "Instantiated hooks successfully")
     }
 
+    /**
+     * Resolves `android.location.Location` via [classLoader] and installs a [hookMethod]
+     * interceptor on each spoofable getter. Failures are caught and logged without crashing
+     * the target app.
+     */
     private fun hookLocation() {
-        try {
+        runCatching {
             val locationClass = Class.forName("android.location.Location", false, classLoader)
-
-            module.hook(locationClass.getDeclaredMethod("getLatitude")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getLatitude()")
-                module.log(Log.INFO, tag, "\t Original latitude: $original")
-                if (PreferencesUtil.getIsPlaying() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.latitude}")
-                    LocationUtil.latitude
+            with(locationClass) {
+                hookMethod("getLatitude", enabled = { true }) { LocationUtil.latitude }
+                hookMethod("getLongitude", enabled = { true }) { LocationUtil.longitude }
+                hookMethod("getAccuracy", enabled = { PreferencesUtil.getUseAccuracy() == true }) { LocationUtil.accuracy }
+                hookMethod("getAltitude", enabled = { PreferencesUtil.getUseAltitude() == true }) { LocationUtil.altitude }
+                hookMethod("getVerticalAccuracyMeters", enabled = { PreferencesUtil.getUseVerticalAccuracy() == true }) { LocationUtil.verticalAccuracy }
+                hookMethod("getSpeed", enabled = { PreferencesUtil.getUseSpeed() == true }) { LocationUtil.speed }
+                hookMethod("getSpeedAccuracyMetersPerSecond", enabled = { PreferencesUtil.getUseSpeedAccuracy() == true }) { LocationUtil.speedAccuracy }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    hookMethod("getMslAltitudeMeters", enabled = { PreferencesUtil.getUseMeanSeaLevel() == true }) { LocationUtil.meanSeaLevel }
+                    hookMethod("getMslAltitudeAccuracyMeters", enabled = { PreferencesUtil.getUseMeanSeaLevelAccuracy() == true }) { LocationUtil.meanSeaLevelAccuracy }
                 } else {
-                    original
+                    module.log(Log.INFO, tag, "getMslAltitudeMeters() and getMslAltitudeAccuracyMeters() not available on this API level")
                 }
             }
-
-            module.hook(locationClass.getDeclaredMethod("getLongitude")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getLongitude()")
-                module.log(Log.INFO, tag, "\t Original longitude: $original")
-                if (PreferencesUtil.getIsPlaying() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.longitude}")
-                    LocationUtil.longitude
-                } else {
-                    original
-                }
-            }
-
-            module.hook(locationClass.getDeclaredMethod("getAccuracy")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getAccuracy()")
-                module.log(Log.INFO, tag, "\t Original accuracy: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseAccuracy() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.accuracy}")
-                    LocationUtil.accuracy
-                } else {
-                    original
-                }
-            }
-
-            module.hook(locationClass.getDeclaredMethod("getAltitude")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getAltitude()")
-                module.log(Log.INFO, tag, "\t Original altitude: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseAltitude() == true) {
-                    module.log(Log.INFO, tag, "\t Modified to: ${LocationUtil.altitude}")
-                    LocationUtil.altitude
-                } else {
-                    original
-                }
-            }
-
-            module.hook(locationClass.getDeclaredMethod("getVerticalAccuracyMeters")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getVerticalAccuracyMeters()")
-                module.log(Log.INFO, tag, "\tOriginal vertical accuracy: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseVerticalAccuracy() == true) {
-                    module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.verticalAccuracy}")
-                    LocationUtil.verticalAccuracy
-                } else {
-                    original
-                }
-            }
-
-            module.hook(locationClass.getDeclaredMethod("getSpeed")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getSpeed()")
-                module.log(Log.INFO, tag, "\tOriginal speed: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseSpeed() == true) {
-                    module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.speed}")
-                    LocationUtil.speed
-                } else {
-                    original
-                }
-            }
-
-            module.hook(locationClass.getDeclaredMethod("getSpeedAccuracyMetersPerSecond")).intercept { chain ->
-                val original = chain.proceed()
-                LocationUtil.updateLocation()
-                module.log(Log.INFO, tag, "Leaving method getSpeedAccuracyMetersPerSecond()")
-                module.log(Log.INFO, tag, "\tOriginal speed accuracy: $original")
-                if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseSpeedAccuracy() == true) {
-                    module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.speedAccuracy}")
-                    LocationUtil.speedAccuracy
-                } else {
-                    original
-                }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                module.hook(locationClass.getDeclaredMethod("getMslAltitudeMeters")).intercept { chain ->
-                    val original = chain.proceed()
-                    LocationUtil.updateLocation()
-                    module.log(Log.INFO, tag, "Leaving method getMslAltitudeMeters()")
-                    module.log(Log.INFO, tag, "\tOriginal MSL altitude: $original")
-                    if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseMeanSeaLevel() == true) {
-                        module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.meanSeaLevel}")
-                        LocationUtil.meanSeaLevel
-                    } else {
-                        original
-                    }
-                }
-
-                module.hook(locationClass.getDeclaredMethod("getMslAltitudeAccuracyMeters")).intercept { chain ->
-                    val original = chain.proceed()
-                    LocationUtil.updateLocation()
-                    module.log(Log.INFO, tag, "Leaving method getMslAltitudeAccuracyMeters()")
-                    module.log(Log.INFO, tag, "\tOriginal MSL altitude accuracy: $original")
-                    if (PreferencesUtil.getIsPlaying() == true && PreferencesUtil.getUseMeanSeaLevelAccuracy() == true) {
-                        module.log(Log.INFO, tag, "\tModified to: ${LocationUtil.meanSeaLevelAccuracy}")
-                        LocationUtil.meanSeaLevelAccuracy
-                    } else {
-                        original
-                    }
-                }
-            } else {
-                module.log(Log.INFO, tag, "getMslAltitudeMeters() and getMslAltitudeAccuracyMeters() not available on this API level")
-            }
-
-        } catch (e: Exception) {
-            module.log(Log.ERROR, tag, "Error hooking Location class - ${e.message}")
-        }
+        }.onFailure { module.log(Log.ERROR, tag, "Error hooking Location class - ${it.message}") }
     }
 
-    private fun hookLocationManager() {
-        try {
-            val locationManagerClass = Class.forName("android.location.LocationManager", false, classLoader)
-            val method = locationManagerClass.getDeclaredMethod("getLastKnownLocation", String::class.java)
-
-            module.hook(method).intercept { chain ->
-                val original = chain.proceed() as? Location
-                module.log(Log.INFO, tag, "Leaving method getLastKnownLocation(provider)")
-                module.log(Log.INFO, tag, "\t Original location: $original")
-                val provider = chain.getArg(0) as String
-                module.log(Log.INFO, tag, "\t Requested data from: $provider")
-                if (PreferencesUtil.getIsPlaying() == true) {
-                    val fakeLocation = LocationUtil.createFakeLocation(provider = provider)
-                    module.log(Log.INFO, tag, "\t Modified location: $fakeLocation")
-                    fakeLocation
-                } else {
-                    original
-                }
+    /**
+     * Extension on [Class] that hooks [methodName] and replaces its return value with
+     * [spoofed] when [PreferencesUtil.getIsPlaying] is `true` and [enabled] returns `true`.
+     *
+     * [LocationUtil.updateLocation] is called on every intercept to ensure the latest
+     * preference values are reflected before the spoofed value is read.
+     *
+     * @param methodName Name of the no-arg getter to hook on this [Class].
+     * @param enabled Additional condition that must hold alongside `isPlaying` for spoofing
+     *   to activate — use `{ true }` for fields that have no separate toggle.
+     * @param spoofed Lambda returning the spoofed value to substitute when active.
+     */
+    private fun Class<*>.hookMethod(
+        methodName: String,
+        enabled: () -> Boolean,
+        spoofed: () -> Any?,
+    ) {
+        module.hook(getDeclaredMethod(methodName)).intercept { chain ->
+            val original = chain.proceed()
+            LocationUtil.updateLocation()
+            module.log(Log.INFO, tag, "Leaving $methodName\n\tOriginal: $original")
+            if (PreferencesUtil.getIsPlaying() == true && enabled()) {
+                val value = spoofed()
+                module.log(Log.INFO, tag, "\tModified to: $value")
+                value
+            } else {
+                original
             }
-
-        } catch (e: Exception) {
-            module.log(Log.ERROR, tag, "Error hooking LocationManager - ${e.message}")
         }
     }
 }

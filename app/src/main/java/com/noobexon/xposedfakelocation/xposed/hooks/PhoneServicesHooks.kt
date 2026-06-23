@@ -3,7 +3,6 @@ package com.noobexon.xposedfakelocation.xposed.hooks
 import android.telephony.CellInfo
 import android.telephony.NeighboringCellInfo
 import android.util.Log
-import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Hooker
@@ -15,7 +14,7 @@ class PhoneServicesHooks(
 ) {
     private val tag = "[PhoneServicesHooks]"
 
-    fun initHooks() {
+    fun init() {
         val phoneInterfaceManagerClass = findClass(
             classLoader,
             "com.android.phone.PhoneInterfaceManager"
@@ -114,7 +113,14 @@ class PhoneServicesHooks(
         if (PreferencesUtil.getIsPlaying() != true) return false
         return args?.asSequence()
             ?.mapNotNull(::extractPackageName)
-            ?.any(LocationUtil::shouldSpoofPackage) == true
+            ?.any { shouldSpoofPackage(it) } == true
+    }
+
+    // Name-based scope attribution for the system-level hooks: a package is spoofed only when it is
+    // one of the manager-selected target apps (mirrored into the remote `target_apps` preference).
+    private fun shouldSpoofPackage(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        return PreferencesUtil.getTargetApps().contains(packageName)
     }
 
     private fun extractPackageName(value: Any?): String? {
