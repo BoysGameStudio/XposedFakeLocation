@@ -8,6 +8,7 @@ import android.os.Build
 import android.telephony.CellInfo
 import android.util.ArrayMap
 import android.util.Log
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import dalvik.system.PathClassLoader
@@ -285,20 +286,21 @@ class SystemServicesHooks(
         hookAll(wifiServiceClass, "getConnectionInfo") { chain ->
             val result = chain.proceed()
             if (shouldSpoofArgs(chain.args)) {
-                // TODO: These Wi-Fi identity values are hardcoded as a temporary fallback.
-                // Expose them as user-configurable settings in the manager app.
                 module.log(Log.INFO, tag, "Replaced Wi-Fi connection info while spoofing.")
-                WifiInfo.Builder()
-                    .setBssid("02:00:00:00:00:00")
-                    .setSsid("AndroidAP".toByteArray())
-                    .setRssi(-60)
-                    .setNetworkId(0)
-                    .build()
+                createFakeWifiInfo()
             } else {
                 result
             }
         }
     }
+
+    private fun createFakeWifiInfo(): WifiInfo =
+        WifiInfo.Builder()
+            .setBssid(PreferencesUtil.getWifiBssid().takeIf(MAC_ADDRESS_REGEX::matches) ?: DEFAULT_WIFI_BSSID)
+            .setSsid(PreferencesUtil.getWifiSsid().toByteArray())
+            .setRssi(PreferencesUtil.getWifiRssi())
+            .setNetworkId(0)
+            .build()
 
     private fun hookGeofence(classLoader: ClassLoader) {
         val serviceClass = findClass(
@@ -583,5 +585,9 @@ class SystemServicesHooks(
             java.lang.Double.TYPE -> 0.0
             else -> null
         }
+    }
+
+    private companion object {
+        private val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
     }
 }

@@ -48,8 +48,13 @@ const val KEY_ENABLE_SYSTEM_HOOKS = "enable_system_hooks"
 
 const val KEY_THEME_OPTION = "theme_option"
 
+const val KEY_WIFI_SSID = "wifi_ssid"
+const val KEY_WIFI_BSSID = "wifi_bssid"
+const val KEY_WIFI_RSSI = "wifi_rssi"
+
 // Packages added/removed from module scope when system-level hooks are toggled.
-val SYSTEM_HOOK_PACKAGES = listOf("android", "com.android.phone")
+// Modern libxposed uses `system` as the virtual package name for system_server.
+val SYSTEM_HOOK_PACKAGES = listOf("system", "com.android.phone")
 
  // DEFAULT VALUES
 const val DEFAULT_USE_ACCURACY = false
@@ -84,6 +89,10 @@ const val DEFAULT_LANGUAGE_TAG = ""
 const val DEFAULT_ENABLE_SYSTEM_HOOKS = false
 
 const val DEFAULT_THEME_OPTION = ""
+
+const val DEFAULT_WIFI_SSID = "AndroidAP"
+const val DEFAULT_WIFI_BSSID = "02:00:00:00:00:00"
+const val DEFAULT_WIFI_RSSI = -60
 
 // MATH & PHYS
 const val PI = 3.14159265359

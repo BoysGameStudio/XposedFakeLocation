@@ -30,6 +30,9 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED
 import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_USE_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_SSID
 import com.noobexon.xposedfakelocation.data.KEY_ACCURACY
 import com.noobexon.xposedfakelocation.data.KEY_ALTITUDE
 import com.noobexon.xposedfakelocation.data.KEY_ENABLE_BROADCAST_CONTROL
@@ -56,6 +59,9 @@ import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED
 import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED_ACCURACY
 import com.noobexon.xposedfakelocation.data.KEY_USE_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.KEY_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_BSSID
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_SSID
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
 import com.noobexon.xposedfakelocation.data.SHARED_PREFS_FILE
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
@@ -67,6 +73,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import java.util.Locale
 
 /**
  * Single-source-of-truth preferences store.
@@ -273,6 +280,44 @@ class PreferencesRepository(context: Context) {
     fun getHideFakeLocationToast(): Boolean = remotePrefs()?.getBoolean(KEY_HIDE_FAKE_LOCATION_TOAST, DEFAULT_HIDE_FAKE_LOCATION_TOAST) ?: DEFAULT_HIDE_FAKE_LOCATION_TOAST
     // endregion
 
+    // region Wi-Fi identity (remote)
+    fun getWifiSsidFlow(): Flow<String> =
+        remoteFlow(KEY_WIFI_SSID, DEFAULT_WIFI_SSID) {
+            it.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID) ?: DEFAULT_WIFI_SSID
+        }
+
+    suspend fun saveWifiSsid(ssid: String) =
+        editRemote { putString(KEY_WIFI_SSID, normalizeWifiSsid(ssid)) }
+
+    fun getWifiBssidFlow(): Flow<String> =
+        remoteFlow(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID) {
+            normalizeWifiBssid(it.getString(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID).orEmpty())
+        }
+
+    suspend fun saveWifiBssid(bssid: String) =
+        editRemote { putString(KEY_WIFI_BSSID, normalizeWifiBssid(bssid)) }
+
+    fun getWifiRssiFlow(): Flow<Int> =
+        remoteFlow(KEY_WIFI_RSSI, DEFAULT_WIFI_RSSI) {
+            it.getInt(KEY_WIFI_RSSI, DEFAULT_WIFI_RSSI).coerceIn(MIN_WIFI_RSSI, MAX_WIFI_RSSI)
+        }
+
+    suspend fun saveWifiRssi(rssi: Int) =
+        editRemote { putInt(KEY_WIFI_RSSI, rssi.coerceIn(MIN_WIFI_RSSI, MAX_WIFI_RSSI)) }
+
+    private fun normalizeWifiSsid(ssid: String): String =
+        ssid.trim().ifBlank { DEFAULT_WIFI_SSID }
+
+    private fun normalizeWifiBssid(bssid: String): String {
+        val trimmed = bssid.trim()
+        return if (MAC_ADDRESS_REGEX.matches(trimmed)) {
+            trimmed.uppercase(Locale.US)
+        } else {
+            DEFAULT_WIFI_BSSID
+        }
+    }
+    // endregion
+
     // region Target Apps (remote)
     fun getTargetAppsFlow(): Flow<Set<String>> =
         remoteFlow(KEY_TARGET_APPS, emptySet()) { parseTargetApps(it.getString(KEY_TARGET_APPS, null)) }
@@ -366,4 +411,10 @@ class PreferencesRepository(context: Context) {
     fun getThemeOptionFlow(): Flow<String> = localFlow(KEY_THEME_OPTION) { it.getString(KEY_THEME_OPTION, DEFAULT_THEME_OPTION) ?: DEFAULT_THEME_OPTION }
     suspend fun saveThemeOption(themeTag: String) = editLocal { putString(KEY_THEME_OPTION, themeTag) }
     // endregion
+
+    private companion object {
+        private const val MIN_WIFI_RSSI = -127
+        private const val MAX_WIFI_RSSI = 0
+        private val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+    }
 }
