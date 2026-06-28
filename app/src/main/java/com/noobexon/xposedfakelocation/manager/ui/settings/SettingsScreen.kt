@@ -978,6 +978,7 @@ private fun TextSettingItem(
     val focusManager = LocalFocusManager.current
     var showTooltip by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf(value) }
+    var hasFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(value) {
         if (text != value) text = value
@@ -1014,7 +1015,11 @@ private fun TextSettingItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) onValueChange(text)
+                    if (focusState.isFocused) {
+                        hasFocused = true
+                    } else if (hasFocused) {
+                        onValueChange(text)
+                    }
                 }
         )
     }
