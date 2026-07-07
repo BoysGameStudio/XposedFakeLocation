@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import android.widget.Toast
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
+import com.noobexon.xposedfakelocation.xposed.hooks.AppWifiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationManagerApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.PhoneServicesHooks
@@ -111,10 +112,11 @@ class ModuleEntry() : XposedModule() {
         PreferencesUtil.init(framework.getRemotePreferences(REMOTE_PREFS_GROUP))
     }
 
-    /** Installs [LocationApiHooks] and [LocationManagerApiHooks] into the target app process. */
+    /** Installs [LocationApiHooks], [LocationManagerApiHooks], and [AppWifiHooks] into the target app process. */
     private fun initHooks(classLoader: ClassLoader) {
         LocationApiHooks(framework, classLoader).init()
         LocationManagerApiHooks(framework, classLoader).init()
+        AppWifiHooks(framework, classLoader).init()
     }
 
     /** Installs [PhoneServicesHooks] into the `com.android.phone` process. */
