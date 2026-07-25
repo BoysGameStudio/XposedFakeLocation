@@ -6,6 +6,7 @@
     <string name="language_system">System default</string>
     <string name="language_english">English</string>
     <string name="language_chinese">Chinese</string>
+    <string name="language_german">German</string>
 
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
