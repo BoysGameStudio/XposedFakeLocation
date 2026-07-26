@@ -11,7 +11,6 @@ import com.noobexon.xposedfakelocation.xposed.hooks.PhoneServicesHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.SystemServicesHooks
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
-import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
@@ -26,26 +25,18 @@ private const val TAG = "[ModuleEntry]"
  * Responsibilities:
  * - Wire loggers into [LocationUtil] and [PreferencesUtil] on module load.
  * - Initialize remote preferences and install the appropriate hook set for each process:
- *   - Regular target apps → [LocationApiHooks] + [LocationManagerApiHooks].
+ *   - Regular target apps → [LocationApiHooks] + [LocationManagerApiHooks] + [AppWifiHooks].
  *   - `com.android.phone` → [PhoneServicesHooks] only (telephony cell/Wi-Fi spoofing).
  *   - `system` (system_server, when opted in) → [SystemServicesHooks].
  */
-class ModuleEntry() : XposedModule() {
-    private var framework: XposedInterface = this
-
-    constructor(module: XposedInterface, param: ModuleLoadedParam) : this() {
-        framework = module
-        onModuleLoaded(param)
-    }
-
-    
+class ModuleEntry : XposedModule() {
     /**
      * Called once when the module is first loaded into a process.
      * Wires the module logger into [LocationUtil] and [PreferencesUtil] so hook-side
      * log calls are routed through the libxposed logging channel.
      */
     override fun onModuleLoaded(param: ModuleLoadedParam) {
-        framework.log(Log.INFO, TAG, "onModuleLoaded: ${param.processName}")
+        log(Log.INFO, TAG, "onModuleLoaded: ${param.processName}")
         initLoggers()
     }
 
@@ -55,7 +46,7 @@ class ModuleEntry() : XposedModule() {
      * hooks fire.
      */
     override fun onPackageLoaded(param: PackageLoadedParam) {
-        framework.log(Log.INFO, TAG, "onPackageLoaded: ${param.packageName}")
+        log(Log.INFO, TAG, "onPackageLoaded: ${param.packageName}")
         initRemotePreferences()
     }
 
@@ -69,14 +60,14 @@ class ModuleEntry() : XposedModule() {
      * Only the first package in the process is processed ([PackageReadyParam.isFirstPackage]).
      */
     override fun onPackageReady(param: PackageReadyParam) {
-        framework.log(Log.INFO, TAG, "onPackageReady: ${param.packageName}")
+        log(Log.INFO, TAG, "onPackageReady: ${param.packageName}")
 
         if (!param.isFirstPackage) return // Run per-package setup only once.
 
         if (param.packageName == "com.android.phone") {
             initPhoneServiceHooks(param.classLoader) 
         } else {
-            initHooks(param.classLoader)
+            initHooks(param.classLoader, param.packageName)
 
             val result = PreferencesUtil.getHideFakeLocationToast()
             if (result == null || !result) {
@@ -91,10 +82,10 @@ class ModuleEntry() : XposedModule() {
      * deep system-level location interception. Installs [SystemServicesHooks].
      */
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
-        framework.log(Log.INFO, TAG, "onSystemServerStarting: ${param.classLoader}")
+        log(Log.INFO, TAG, "onSystemServerStarting: ${param.classLoader}")
         initRemotePreferences()
         if (!PreferencesUtil.getEnableSystemHooks()) {
-            framework.log(Log.INFO, TAG, "System hooks are disabled in preferences; skipping system_server hooks.")
+            log(Log.INFO, TAG, "System hooks are disabled in preferences; skipping system_server hooks.")
             return
         }
         initSystemHooks(param.classLoader)
@@ -102,31 +93,31 @@ class ModuleEntry() : XposedModule() {
 
     /** Routes [LocationUtil] and [PreferencesUtil] log calls through the libxposed logger. */
     private fun initLoggers() {
-        val logger: (Int, String, String) -> Unit = { priority, tag, message -> framework.log(priority, tag, message) }
+        val logger: (Int, String, String) -> Unit = { priority, tag, message -> log(priority, tag, message) }
         LocationUtil.logger = logger
         PreferencesUtil.logger = logger
     }
 
     /** Fetches and initializes the LSPosed remote [SharedPreferences] used by hook-side utils. */
     private fun initRemotePreferences() {
-        PreferencesUtil.init(framework.getRemotePreferences(REMOTE_PREFS_GROUP))
+        PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
     }
 
     /** Installs [LocationApiHooks], [LocationManagerApiHooks], and [AppWifiHooks] into the target app process. */
-    private fun initHooks(classLoader: ClassLoader) {
-        LocationApiHooks(framework, classLoader).init()
-        LocationManagerApiHooks(framework, classLoader).init()
-        AppWifiHooks(framework, classLoader).init()
+    private fun initHooks(classLoader: ClassLoader, packageName: String) {
+        LocationApiHooks(this, classLoader).init()
+        LocationManagerApiHooks(this, classLoader).init()
+        AppWifiHooks(this, classLoader, packageName).init()
     }
 
     /** Installs [PhoneServicesHooks] into the `com.android.phone` process. */
     private fun initPhoneServiceHooks(classLoader: ClassLoader) {
-        PhoneServicesHooks(framework, classLoader).init()
+        PhoneServicesHooks(this, classLoader).init()
     }
 
     /** Installs [SystemServicesHooks] into the system_server process. */
     private fun initSystemHooks(classLoader: ClassLoader) {
-        SystemServicesHooks(framework, classLoader).init()
+        SystemServicesHooks(this, classLoader).init()
     }
 
     /**
@@ -136,13 +127,13 @@ class ModuleEntry() : XposedModule() {
     private fun showActiveToast(param: PackageReadyParam) {
         val clazz = Class.forName("android.app.Instrumentation", false, param.classLoader)
         val method = clazz.getDeclaredMethod("callApplicationOnCreate", Application::class.java)
-        framework.hook(method).intercept { chain ->
+        hook(method).intercept { chain ->
             val result = chain.proceed()
             runCatching {
                 val context = (chain.getArg(0) as Application).applicationContext
-                framework.log(Log.INFO, TAG, "Target App's context has been acquired (${param.packageName}).")
+                log(Log.INFO, TAG, "Target App's context has been acquired (${param.packageName}).")
                 Toast.makeText(context, "Fake Location Is Active!", Toast.LENGTH_SHORT).show()
-            }.onFailure { framework.log(Log.ERROR, TAG, "Toast/context failed - ${it.message}") }
+            }.onFailure { log(Log.ERROR, TAG, "Toast/context failed - ${it.message}") }
             result
         }
     }

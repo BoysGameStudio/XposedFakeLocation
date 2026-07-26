@@ -8,7 +8,6 @@ import android.os.Build
 import android.telephony.CellInfo
 import android.util.ArrayMap
 import android.util.Log
-import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import dalvik.system.PathClassLoader
@@ -214,6 +213,16 @@ class SystemServicesHooks(
         return PreferencesUtil.getTargetApps().contains(packageName)
     }
 
+    /** Attributes the Binder call to a selected target package after the shared gate passes. */
+    private fun shouldSpoofWifiArgs(
+        args: List<Any?>?,
+        targetApps: Set<String>
+    ): Boolean =
+        args?.asSequence()
+            ?.flatMap { collectPackageNames(it).asSequence() }
+            ?.any(targetApps::contains)
+            ?: false
+
     private fun hookGnssRegistration(classLoader: ClassLoader) {
         val serviceClasses = listOfNotNull(
             findClass(classLoader, "com.android.server.location.gnss.GnssManagerService"),
@@ -275,7 +284,8 @@ class SystemServicesHooks(
     private fun hookWifiServiceImpl(wifiServiceClass: Class<*>) {
         hookAll(wifiServiceClass, "getScanResults") { chain ->
             val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
+            val identity = WifiIdentityHookPolicy.readActiveIdentity(module)
+            if (identity != null && shouldSpoofWifiArgs(chain.args, identity.targetApps)) {
                 module.log(Log.INFO, tag, "Cleared Wi-Fi scan results while spoofing.")
                 emptyList<Any>()
             } else {
@@ -285,20 +295,21 @@ class SystemServicesHooks(
 
         hookAll(wifiServiceClass, "getConnectionInfo") { chain ->
             val result = chain.proceed()
-            if (shouldSpoofArgs(chain.args)) {
+            val identity = WifiIdentityHookPolicy.readActiveIdentity(module)
+            if (identity != null && shouldSpoofWifiArgs(chain.args, identity.targetApps)) {
                 module.log(Log.INFO, tag, "Replaced Wi-Fi connection info while spoofing.")
-                createFakeWifiInfo()
+                createFakeWifiInfo(identity)
             } else {
                 result
             }
         }
     }
 
-    private fun createFakeWifiInfo(): WifiInfo =
+    private fun createFakeWifiInfo(identity: WifiIdentity): WifiInfo =
         WifiInfo.Builder()
-            .setBssid(PreferencesUtil.getWifiBssid().takeIf(MAC_ADDRESS_REGEX::matches) ?: DEFAULT_WIFI_BSSID)
-            .setSsid(PreferencesUtil.getWifiSsid().toByteArray())
-            .setRssi(PreferencesUtil.getWifiRssi())
+            .setBssid(identity.bssid)
+            .setSsid(identity.ssid.toByteArray())
+            .setRssi(identity.rssi)
             .setNetworkId(0)
             .build()
 
@@ -587,7 +598,4 @@ class SystemServicesHooks(
         }
     }
 
-    private companion object {
-        private val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
-    }
 }

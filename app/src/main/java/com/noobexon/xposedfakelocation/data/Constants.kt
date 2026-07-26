@@ -45,6 +45,7 @@ const val KEY_ENABLE_BROADCAST_CONTROL = "enable_broadcast_control"
 const val KEY_LANGUAGE_TAG = "language_tag"
 
 const val KEY_ENABLE_SYSTEM_HOOKS = "enable_system_hooks"
+const val KEY_ENABLE_WIFI_IDENTITY = "enable_wifi_identity"
 
 const val KEY_THEME_OPTION = "theme_option"
 
@@ -87,12 +88,16 @@ const val DEFAULT_ENABLE_BROADCAST_CONTROL = false
 const val DEFAULT_LANGUAGE_TAG = ""
 
 const val DEFAULT_ENABLE_SYSTEM_HOOKS = false
+const val DEFAULT_ENABLE_WIFI_IDENTITY = false
 
 const val DEFAULT_THEME_OPTION = ""
 
 const val DEFAULT_WIFI_SSID = "AndroidAP"
 const val DEFAULT_WIFI_BSSID = "02:00:00:00:00:00"
 const val DEFAULT_WIFI_RSSI = -60
+const val MIN_WIFI_RSSI = -127
+const val MAX_WIFI_RSSI = 0
+val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 
 // MATH & PHYS
 const val PI = 3.14159265359

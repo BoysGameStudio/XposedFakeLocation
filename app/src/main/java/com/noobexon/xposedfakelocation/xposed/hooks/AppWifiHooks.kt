@@ -3,9 +3,8 @@ package com.noobexon.xposedfakelocation.xposed.hooks
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.util.Log
-import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
-import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
 import io.github.libxposed.api.XposedInterface
 
 /**
@@ -24,11 +23,16 @@ import io.github.libxposed.api.XposedInterface
  */
 class AppWifiHooks(
     private val module: XposedInterface,
-    private val classLoader: ClassLoader
+    private val classLoader: ClassLoader,
+    private val packageName: String
 ) {
     private val tag = "[AppWifiHooks]"
 
     fun init() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            module.log(Log.WARN, tag, "App-side Wi-Fi hooks require Android 11 or newer.")
+            return
+        }
         hookConnectionInfo()
         hookScanResults()
         module.log(Log.INFO, tag, "Instantiated app-side Wi-Fi hooks successfully")
@@ -44,9 +48,10 @@ class AppWifiHooks(
             val method = wifiManagerClass.getDeclaredMethod("getConnectionInfo")
             module.hook(method).intercept { chain ->
                 val result = chain.proceed()
-                if (shouldSpoof()) {
+                val identity = WifiIdentityHookPolicy.readActiveIdentity(module)
+                if (identity?.targets(packageName) == true) {
                     module.log(Log.INFO, tag, "Replaced Wi-Fi connection info (app-side) while spoofing.")
-                    createFakeWifiInfo(result as? WifiInfo)
+                    createFakeWifiInfo(identity)
                 } else {
                     result
                 }
@@ -68,7 +73,7 @@ class AppWifiHooks(
             val method = wifiManagerClass.getDeclaredMethod("getScanResults")
             module.hook(method).intercept { chain ->
                 val result = chain.proceed()
-                if (shouldSpoof()) {
+                if (WifiIdentityHookPolicy.readActiveIdentity(module)?.targets(packageName) == true) {
                     module.log(Log.INFO, tag, "Cleared Wi-Fi scan results (app-side) while spoofing.")
                     emptyList<ScanResult>()
                 } else {
@@ -81,30 +86,18 @@ class AppWifiHooks(
         }
     }
 
-    private fun shouldSpoof(): Boolean {
-        return PreferencesUtil.getIsPlaying() == true &&
-            PreferencesUtil.getEnableSystemHooks() == true
-    }
-
     /**
      * Builds a fake [WifiInfo] from the configured SSID/BSSID/RSSI preferences. Reuses
      * the same construction logic as [SystemServicesHooks.createFakeWifiInfo] so the
      * spoofed values are identical on both hook paths.
      */
     @Suppress("DEPRECATION")
-    private fun createFakeWifiInfo(original: WifiInfo?): WifiInfo {
+    private fun createFakeWifiInfo(identity: WifiIdentity): WifiInfo {
         val builder = WifiInfo.Builder()
-            .setBssid(
-                PreferencesUtil.getWifiBssid()?.takeIf(MAC_ADDRESS_REGEX::matches)
-                    ?: DEFAULT_WIFI_BSSID
-            )
-            .setSsid(PreferencesUtil.getWifiSsid().toByteArray())
-            .setRssi(PreferencesUtil.getWifiRssi())
+            .setBssid(identity.bssid)
+            .setSsid(identity.ssid.toByteArray())
+            .setRssi(identity.rssi)
             .setNetworkId(0)
         return builder.build()
-    }
-
-    private companion object {
-        private val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
     }
 }

@@ -10,6 +10,7 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_WIFI_IDENTITY
 import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
 import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
@@ -30,6 +31,8 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
 import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_SSID
+import com.noobexon.xposedfakelocation.data.MAX_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.MIN_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.SYSTEM_HOOK_PACKAGES
 import com.noobexon.xposedfakelocation.data.repository.PreferencesRepository
 import com.noobexon.xposedfakelocation.manager.App
@@ -242,6 +245,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     // ---- Wi-Fi identity ----------------------------------------------------------------------
 
+    private val _enableWifiIdentity = Preference(
+        DEFAULT_ENABLE_WIFI_IDENTITY,
+        preferencesRepository.getEnableWifiIdentityFlow(),
+        preferencesRepository::saveEnableWifiIdentity
+    )
     private val _wifiSsid = Preference(
         DEFAULT_WIFI_SSID,
         preferencesRepository.getWifiSsidFlow(),
@@ -339,6 +347,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .combine(_hideFakeLocationToast.state)   { s, v -> s.copy(hideFakeLocationToast = v) }
         .combine(_enableBroadcastControl.state)  { s, v -> s.copy(enableBroadcastControl = v) }
         .combine(enableSystemHooks)              { s, v -> s.copy(systemHooksEnabled = v) }
+        .combine(_enableWifiIdentity.state)      { s, v -> s.copy(wifiIdentityEnabled = v) }
         .combine(_wifiSsid.state)                { s, v -> s.copy(wifiSsid = v) }
         .combine(_wifiBssid.state)               { s, v -> s.copy(wifiBssid = v) }
         .combine(_wifiRssi.state)                { s, v -> s.copy(wifiRssi = v) }
@@ -450,6 +459,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      */
     fun setHideFakeLocationToast(value: Boolean) = _hideFakeLocationToast.set(value)
 
+    fun setEnableWifiIdentity(value: Boolean) = _enableWifiIdentity.set(value)
+
     fun setWifiSsid(value: String) =
         _wifiSsid.set(value.trim().ifBlank { DEFAULT_WIFI_SSID })
 
@@ -544,6 +555,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         setUseSpeedAccuracy(DEFAULT_USE_SPEED_ACCURACY)
         setSpeedAccuracy(DEFAULT_SPEED_ACCURACY)
         setHideFakeLocationToast(DEFAULT_HIDE_FAKE_LOCATION_TOAST)
+        setEnableWifiIdentity(DEFAULT_ENABLE_WIFI_IDENTITY)
         setWifiSsid(DEFAULT_WIFI_SSID)
         setWifiBssid(DEFAULT_WIFI_BSSID)
         setWifiRssi(DEFAULT_WIFI_RSSI.toString())
@@ -602,8 +614,4 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private companion object {
-        private const val MIN_WIFI_RSSI = -127
-        private const val MAX_WIFI_RSSI = 0
-    }
 }

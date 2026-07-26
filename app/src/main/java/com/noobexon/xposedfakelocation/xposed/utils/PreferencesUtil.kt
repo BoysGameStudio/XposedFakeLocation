@@ -39,6 +39,9 @@ import com.noobexon.xposedfakelocation.data.KEY_VERTICAL_ACCURACY
 import com.noobexon.xposedfakelocation.data.KEY_WIFI_BSSID
 import com.noobexon.xposedfakelocation.data.KEY_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.KEY_WIFI_SSID
+import com.noobexon.xposedfakelocation.data.MAC_ADDRESS_REGEX
+import com.noobexon.xposedfakelocation.data.MAX_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.MIN_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil.gson
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil.init
@@ -107,6 +110,7 @@ object PreferencesUtil {
     fun getSpeedAccuracy(): Float? = getPreference(KEY_SPEED_ACCURACY)
     fun getHideFakeLocationToast(): Boolean? = getPreference(KEY_HIDE_FAKE_LOCATION_TOAST)
     fun getEnableSystemHooks(): Boolean = preferences?.getBoolean(KEY_ENABLE_SYSTEM_HOOKS, false) ?: false
+
     fun getWifiSsid(): String =
         preferences?.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID)?.trim()?.ifBlank { DEFAULT_WIFI_SSID }
             ?: DEFAULT_WIFI_SSID
@@ -179,7 +183,4 @@ object PreferencesUtil {
         }
     }
 
-    private const val MIN_WIFI_RSSI = -127
-    private const val MAX_WIFI_RSSI = 0
-    private val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 }

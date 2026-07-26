@@ -6,6 +6,7 @@ import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
 import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
 import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_WIFI_IDENTITY
 import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
 import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
 import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
@@ -158,6 +159,7 @@ enum class NumericSetting(
 object SettingKeys {
     const val HIDE_TOAST = "hide_toast"
     const val SYSTEM_HOOKS = "system_hooks"
+    const val WIFI_IDENTITY = "wifi_identity"
     const val WIFI_SSID = "wifi_ssid"
     const val WIFI_BSSID = "wifi_bssid"
     const val WIFI_RSSI = "wifi_rssi"
@@ -309,6 +311,7 @@ data class SettingsUiState(
     val enableBroadcastControl: Boolean = DEFAULT_ENABLE_BROADCAST_CONTROL,
     val systemHooksEnabled: Boolean = DEFAULT_ENABLE_SYSTEM_HOOKS,
     // Wi-Fi identity
+    val wifiIdentityEnabled: Boolean = DEFAULT_ENABLE_WIFI_IDENTITY,
     val wifiSsid: String = DEFAULT_WIFI_SSID,
     val wifiBssid: String = DEFAULT_WIFI_BSSID,
     val wifiRssi: Int = DEFAULT_WIFI_RSSI,
