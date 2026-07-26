@@ -95,9 +95,21 @@ const val DEFAULT_THEME_OPTION = ""
 const val DEFAULT_WIFI_SSID = "AndroidAP"
 const val DEFAULT_WIFI_BSSID = "02:00:00:00:00:00"
 const val DEFAULT_WIFI_RSSI = -60
+const val MAX_WIFI_SSID_BYTES = 32
 const val MIN_WIFI_RSSI = -127
 const val MAX_WIFI_RSSI = 0
 val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+
+fun normalizeWifiSsid(rawSsid: String?): String {
+    val trimmed = rawSsid?.trim().orEmpty()
+    val utf8 = trimmed.toByteArray(Charsets.UTF_8)
+    val isValidUtf8 = utf8.toString(Charsets.UTF_8) == trimmed
+    return if (trimmed.isNotEmpty() && isValidUtf8 && utf8.size <= MAX_WIFI_SSID_BYTES) {
+        trimmed
+    } else {
+        DEFAULT_WIFI_SSID
+    }
+}
 
 // MATH & PHYS
 const val PI = 3.14159265359

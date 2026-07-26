@@ -16,6 +16,7 @@ import com.noobexon.xposedfakelocation.data.MAC_ADDRESS_REGEX
 import com.noobexon.xposedfakelocation.data.MAX_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.MIN_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
+import com.noobexon.xposedfakelocation.data.normalizeWifiSsid
 import io.github.libxposed.api.XposedInterface
 
 internal data class WifiIdentity(
@@ -50,10 +51,9 @@ internal object WifiIdentityHookPolicy {
             return@runCatching null
         }
 
-        val ssid = preferences.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID)
-            ?.trim()
-            ?.ifBlank { DEFAULT_WIFI_SSID }
-            ?: DEFAULT_WIFI_SSID
+        val ssid = normalizeWifiSsid(
+            preferences.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID)
+        )
         val bssid = preferences.getString(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID)
             ?.trim()
             ?.takeIf(MAC_ADDRESS_REGEX::matches)
@@ -73,6 +73,18 @@ internal object WifiIdentityHookPolicy {
         isPlaying: Boolean?,
         wifiIdentityEnabled: Boolean
     ): Boolean = isPlaying == true && wifiIdentityEnabled
+
+    /**
+     * Wi-Fi service calls pass the caller package first and the optional attribution tag second.
+     * Only the package identifies target membership.
+     */
+    internal fun targetsSystemWifiCaller(
+        args: List<Any?>?,
+        targetApps: Set<String>
+    ): Boolean {
+        val callingPackage = args?.firstOrNull() as? String ?: return false
+        return callingPackage in targetApps
+    }
 
     private val gson = Gson()
     private val targetAppsType = object : TypeToken<Set<String>>() {}.type

@@ -71,6 +71,7 @@ import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
 import com.noobexon.xposedfakelocation.data.SHARED_PREFS_FILE
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
+import com.noobexon.xposedfakelocation.data.normalizeWifiSsid
 import com.noobexon.xposedfakelocation.manager.App
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -302,7 +303,7 @@ class PreferencesRepository(context: Context) {
     // region Wi-Fi identity (remote)
     fun getWifiSsidFlow(): Flow<String> =
         remoteFlow(KEY_WIFI_SSID, DEFAULT_WIFI_SSID) {
-            it.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID) ?: DEFAULT_WIFI_SSID
+            normalizeWifiSsid(it.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID))
         }
 
     suspend fun saveWifiSsid(ssid: String) =
@@ -323,9 +324,6 @@ class PreferencesRepository(context: Context) {
 
     suspend fun saveWifiRssi(rssi: Int) =
         editRemote { putInt(KEY_WIFI_RSSI, rssi.coerceIn(MIN_WIFI_RSSI, MAX_WIFI_RSSI)) }
-
-    private fun normalizeWifiSsid(ssid: String): String =
-        ssid.trim().ifBlank { DEFAULT_WIFI_SSID }
 
     private fun normalizeWifiBssid(bssid: String): String {
         val trimmed = bssid.trim()

@@ -217,11 +217,7 @@ class SystemServicesHooks(
     private fun shouldSpoofWifiArgs(
         args: List<Any?>?,
         targetApps: Set<String>
-    ): Boolean =
-        args?.asSequence()
-            ?.flatMap { collectPackageNames(it).asSequence() }
-            ?.any(targetApps::contains)
-            ?: false
+    ): Boolean = WifiIdentityHookPolicy.targetsSystemWifiCaller(args, targetApps)
 
     private fun hookGnssRegistration(classLoader: ClassLoader) {
         val serviceClasses = listOfNotNull(

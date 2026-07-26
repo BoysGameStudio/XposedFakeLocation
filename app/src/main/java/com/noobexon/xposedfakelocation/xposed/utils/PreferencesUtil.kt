@@ -43,6 +43,7 @@ import com.noobexon.xposedfakelocation.data.MAC_ADDRESS_REGEX
 import com.noobexon.xposedfakelocation.data.MAX_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.MIN_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
+import com.noobexon.xposedfakelocation.data.normalizeWifiSsid
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil.gson
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil.init
 
@@ -112,8 +113,7 @@ object PreferencesUtil {
     fun getEnableSystemHooks(): Boolean = preferences?.getBoolean(KEY_ENABLE_SYSTEM_HOOKS, false) ?: false
 
     fun getWifiSsid(): String =
-        preferences?.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID)?.trim()?.ifBlank { DEFAULT_WIFI_SSID }
-            ?: DEFAULT_WIFI_SSID
+        normalizeWifiSsid(preferences?.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID))
 
     fun getWifiBssid(): String =
         preferences?.getString(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID)?.trim()?.takeIf(MAC_ADDRESS_REGEX::matches)
