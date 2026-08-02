@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import android.widget.Toast
 import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
+import com.noobexon.xposedfakelocation.xposed.hooks.AppWifiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.LocationManagerApiHooks
 import com.noobexon.xposedfakelocation.xposed.hooks.PhoneServicesHooks
@@ -24,12 +25,11 @@ private const val TAG = "[ModuleEntry]"
  * Responsibilities:
  * - Wire loggers into [LocationUtil] and [PreferencesUtil] on module load.
  * - Initialize remote preferences and install the appropriate hook set for each process:
- *   - Regular target apps → [LocationApiHooks] + [LocationManagerApiHooks].
+ *   - Regular target apps → [LocationApiHooks] + [LocationManagerApiHooks] + [AppWifiHooks].
  *   - `com.android.phone` → [PhoneServicesHooks] only (telephony cell/Wi-Fi spoofing).
- *   - `android` (system_server, when opted in) → [SystemServicesHooks].
+ *   - `system` (system_server, when opted in) → [SystemServicesHooks].
  */
 class ModuleEntry : XposedModule() {
-    
     /**
      * Called once when the module is first loaded into a process.
      * Wires the module logger into [LocationUtil] and [PreferencesUtil] so hook-side
@@ -67,7 +67,7 @@ class ModuleEntry : XposedModule() {
         if (param.packageName == "com.android.phone") {
             initPhoneServiceHooks(param.classLoader) 
         } else {
-            initHooks(param.classLoader)
+            initHooks(param.classLoader, param.packageName)
 
             val result = PreferencesUtil.getHideFakeLocationToast()
             if (result == null || !result) {
@@ -78,12 +78,16 @@ class ModuleEntry : XposedModule() {
 
     /**
      * Called when system_server is starting.
-     * Only fires when the user has added `android` to the module scope to enable
+     * Only fires when the user has added `system` to the module scope to enable
      * deep system-level location interception. Installs [SystemServicesHooks].
      */
     override fun onSystemServerStarting(param: SystemServerStartingParam) {
         log(Log.INFO, TAG, "onSystemServerStarting: ${param.classLoader}")
         initRemotePreferences()
+        if (!PreferencesUtil.getEnableSystemHooks()) {
+            log(Log.INFO, TAG, "System hooks are disabled in preferences; skipping system_server hooks.")
+            return
+        }
         initSystemHooks(param.classLoader)
     }
 
@@ -99,10 +103,11 @@ class ModuleEntry : XposedModule() {
         PreferencesUtil.init(getRemotePreferences(REMOTE_PREFS_GROUP))
     }
 
-    /** Installs [LocationApiHooks] and [LocationManagerApiHooks] into the target app process. */
-    private fun initHooks(classLoader: ClassLoader) {
+    /** Installs [LocationApiHooks], [LocationManagerApiHooks], and [AppWifiHooks] into the target app process. */
+    private fun initHooks(classLoader: ClassLoader, packageName: String) {
         LocationApiHooks(this, classLoader).init()
         LocationManagerApiHooks(this, classLoader).init()
+        AppWifiHooks(this, classLoader, packageName).init()
     }
 
     /** Installs [PhoneServicesHooks] into the `com.android.phone` process. */
