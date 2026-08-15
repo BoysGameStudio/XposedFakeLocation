@@ -9,13 +9,76 @@ import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
-import com.noobexon.xposedfakelocation.data.*
+import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_BROADCAST_CONTROL
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.DEFAULT_ENABLE_WIFI_IDENTITY
+import com.noobexon.xposedfakelocation.data.DEFAULT_HIDE_FAKE_LOCATION_TOAST
+import com.noobexon.xposedfakelocation.data.DEFAULT_LANGUAGE_TAG
+import com.noobexon.xposedfakelocation.data.DEFAULT_MAP_ZOOM
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_THEME_OPTION
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_RANDOMIZE
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_USE_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_SSID
+import com.noobexon.xposedfakelocation.data.KEY_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_ALTITUDE
+import com.noobexon.xposedfakelocation.data.KEY_ENABLE_BROADCAST_CONTROL
+import com.noobexon.xposedfakelocation.data.KEY_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.KEY_ENABLE_WIFI_IDENTITY
+import com.noobexon.xposedfakelocation.data.KEY_FAVORITES
+import com.noobexon.xposedfakelocation.data.KEY_HIDE_FAKE_LOCATION_TOAST
+import com.noobexon.xposedfakelocation.data.KEY_IS_PLAYING
+import com.noobexon.xposedfakelocation.data.KEY_LANGUAGE_TAG
+import com.noobexon.xposedfakelocation.data.KEY_LAST_CLICKED_LOCATION
+import com.noobexon.xposedfakelocation.data.KEY_MAP_ZOOM
+import com.noobexon.xposedfakelocation.data.KEY_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.KEY_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.KEY_SAVED_LOCATION_PROFILES
+import com.noobexon.xposedfakelocation.data.KEY_SIGNAL_BASELINE_SNAPSHOT
+import com.noobexon.xposedfakelocation.data.KEY_SPEED
+import com.noobexon.xposedfakelocation.data.KEY_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_TARGET_APPS
+import com.noobexon.xposedfakelocation.data.KEY_THEME_OPTION
+import com.noobexon.xposedfakelocation.data.KEY_USE_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_ALTITUDE
+import com.noobexon.xposedfakelocation.data.KEY_USE_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.KEY_USE_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_RANDOMIZE
+import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED
+import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_BSSID
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_SSID
+import com.noobexon.xposedfakelocation.data.MAC_ADDRESS_REGEX
+import com.noobexon.xposedfakelocation.data.MAX_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.MIN_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.REMOTE_PREFS_GROUP
+import com.noobexon.xposedfakelocation.data.SHARED_PREFS_FILE
 import com.noobexon.xposedfakelocation.data.model.FavoriteLocation
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfile
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfileCodec
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
+import com.noobexon.xposedfakelocation.data.normalizeWifiSsid
 import com.noobexon.xposedfakelocation.manager.App
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -24,6 +87,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import java.util.Locale
 
 private fun defaultRemotePrefs(): SharedPreferences? =
     runCatching { App.service?.getRemotePreferences(REMOTE_PREFS_GROUP) }.getOrNull()
@@ -295,10 +359,59 @@ class PreferencesRepository internal constructor(
     fun getEnableSystemHooks(): Boolean = remotePrefs()?.getBoolean(KEY_ENABLE_SYSTEM_HOOKS, DEFAULT_ENABLE_SYSTEM_HOOKS) ?: DEFAULT_ENABLE_SYSTEM_HOOKS
     // endregion
 
+    // region Enable Wi-Fi Identity Hooks (remote)
+    fun getEnableWifiIdentityFlow(): Flow<Boolean> =
+        remoteFlow(KEY_ENABLE_WIFI_IDENTITY, DEFAULT_ENABLE_WIFI_IDENTITY) {
+            it.getBoolean(KEY_ENABLE_WIFI_IDENTITY, DEFAULT_ENABLE_WIFI_IDENTITY)
+        }
+
+    suspend fun saveEnableWifiIdentity(enabled: Boolean) =
+        editRemote { putBoolean(KEY_ENABLE_WIFI_IDENTITY, enabled) }
+
+    fun getEnableWifiIdentity(): Boolean =
+        remotePrefs()?.getBoolean(KEY_ENABLE_WIFI_IDENTITY, DEFAULT_ENABLE_WIFI_IDENTITY)
+            ?: DEFAULT_ENABLE_WIFI_IDENTITY
+    // endregion
+
     // region Hide Fake Location Toast (remote)
     fun getHideFakeLocationToastFlow(): Flow<Boolean> = remoteFlow(KEY_HIDE_FAKE_LOCATION_TOAST, DEFAULT_HIDE_FAKE_LOCATION_TOAST) { it.getBoolean(KEY_HIDE_FAKE_LOCATION_TOAST, DEFAULT_HIDE_FAKE_LOCATION_TOAST) }
     suspend fun saveHideFakeLocationToast(hideFakeLocationToast: Boolean) = editRemote { putBoolean(KEY_HIDE_FAKE_LOCATION_TOAST, hideFakeLocationToast) }
     fun getHideFakeLocationToast(): Boolean = remotePrefs()?.getBoolean(KEY_HIDE_FAKE_LOCATION_TOAST, DEFAULT_HIDE_FAKE_LOCATION_TOAST) ?: DEFAULT_HIDE_FAKE_LOCATION_TOAST
+    // endregion
+
+    // region Wi-Fi identity (remote)
+    fun getWifiSsidFlow(): Flow<String> =
+        remoteFlow(KEY_WIFI_SSID, DEFAULT_WIFI_SSID) {
+            normalizeWifiSsid(it.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID))
+        }
+
+    suspend fun saveWifiSsid(ssid: String) =
+        editRemote { putString(KEY_WIFI_SSID, normalizeWifiSsid(ssid)) }
+
+    fun getWifiBssidFlow(): Flow<String> =
+        remoteFlow(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID) {
+            normalizeWifiBssid(it.getString(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID).orEmpty())
+        }
+
+    suspend fun saveWifiBssid(bssid: String) =
+        editRemote { putString(KEY_WIFI_BSSID, normalizeWifiBssid(bssid)) }
+
+    fun getWifiRssiFlow(): Flow<Int> =
+        remoteFlow(KEY_WIFI_RSSI, DEFAULT_WIFI_RSSI) {
+            it.getInt(KEY_WIFI_RSSI, DEFAULT_WIFI_RSSI).coerceIn(MIN_WIFI_RSSI, MAX_WIFI_RSSI)
+        }
+
+    suspend fun saveWifiRssi(rssi: Int) =
+        editRemote { putInt(KEY_WIFI_RSSI, rssi.coerceIn(MIN_WIFI_RSSI, MAX_WIFI_RSSI)) }
+
+    private fun normalizeWifiBssid(bssid: String): String {
+        val trimmed = bssid.trim()
+        return if (MAC_ADDRESS_REGEX.matches(trimmed)) {
+            trimmed.uppercase(Locale.US)
+        } else {
+            DEFAULT_WIFI_BSSID
+        }
+    }
     // endregion
 
     // region Target Apps (remote)
@@ -342,6 +455,15 @@ class PreferencesRepository internal constructor(
         logDebug("Removed Favorite: $favorite")
     }
 
+    suspend fun updateFavorite(old: FavoriteLocation, new: FavoriteLocation) {
+        val updated = getFavorites().toMutableList().apply {
+            val index = indexOf(old)
+            if (index != -1) set(index, new)
+        }
+        saveFavorites(updated)
+        Log.d(tag, "Updated Favorite: $old -> $new")
+    }
+
     fun getFavorites(): List<FavoriteLocation> = parseFavorites(localPrefs.getString(KEY_FAVORITES, null))
 
     private fun saveFavorites(favorites: List<FavoriteLocation>) {
@@ -361,7 +483,7 @@ class PreferencesRepository internal constructor(
     }
     // endregion
 
-    fun getSavedLocationProfilesFlow(): Flow<List<SavedLocationProfile>> =
+fun getSavedLocationProfilesFlow(): Flow<List<SavedLocationProfile>> =
         localFlow(KEY_SAVED_LOCATION_PROFILES) { parseSavedLocationProfiles(it.getString(KEY_SAVED_LOCATION_PROFILES, null)) }
 
     fun getSavedLocationProfiles(): List<SavedLocationProfile> =
@@ -405,6 +527,17 @@ class PreferencesRepository internal constructor(
     private fun parseSavedLocationProfiles(json: String?): List<SavedLocationProfile> {
         return SavedLocationProfileCodec.parseProfiles(json).profiles
     }
+    // endregion
+
+    // region Map Zoom (local)
+    fun getMapZoom(): Double {
+        val bits = localPrefs.getLong(KEY_MAP_ZOOM, java.lang.Double.doubleToRawLongBits(DEFAULT_MAP_ZOOM))
+        return java.lang.Double.longBitsToDouble(bits)
+    }
+
+    fun saveMapZoom(zoom: Double) =
+        editLocal { putLong(KEY_MAP_ZOOM, java.lang.Double.doubleToRawLongBits(zoom)) }
+    // endregion
 
     // region Broadcast Control (local)
     fun getEnableBroadcastControlFlow(): Flow<Boolean> = localFlow(KEY_ENABLE_BROADCAST_CONTROL) { it.getBoolean(KEY_ENABLE_BROADCAST_CONTROL, DEFAULT_ENABLE_BROADCAST_CONTROL) }
@@ -416,7 +549,7 @@ class PreferencesRepository internal constructor(
     suspend fun saveLanguageTag(languageTag: String) = editLocal { putString(KEY_LANGUAGE_TAG, languageTag) }
     // endregion
 
-    private fun logWarning(message: String) {
+private fun logWarning(message: String) {
         runCatching { Log.w(tag, message) }
     }
 
@@ -427,4 +560,10 @@ class PreferencesRepository internal constructor(
     private fun logDebug(message: String) {
         runCatching { Log.d(tag, message) }
     }
+
+    // region Theme (local)
+    fun getThemeOptionFlow(): Flow<String> = localFlow(KEY_THEME_OPTION) { it.getString(KEY_THEME_OPTION, DEFAULT_THEME_OPTION) ?: DEFAULT_THEME_OPTION }
+    suspend fun saveThemeOption(themeTag: String) = editLocal { putString(KEY_THEME_OPTION, themeTag) }
+    // endregion
+
 }

@@ -6,21 +6,28 @@ import android.telephony.CellInfo
 import android.telephony.CellLocation
 import android.telephony.NeighboringCellInfo
 import android.util.Log
+import com.noobexon.xposedfakelocation.data.model.ShanghaiCellTower
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.CellularBaselineSnapshot
+import com.noobexon.xposedfakelocation.xposed.utils.CellTowerUtil
 import com.noobexon.xposedfakelocation.xposed.utils.CellularBaselineReplay
 import com.noobexon.xposedfakelocation.xposed.utils.LocationUtil
 import com.noobexon.xposedfakelocation.xposed.utils.PreferencesUtil
+import com.noobexon.xposedfakelocation.xposed.utils.ShanghaiCellTowerStore
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Hooker
 import java.lang.reflect.Method
 
 class PhoneServicesHooks(
     private val module: XposedInterface,
-    private val classLoader: ClassLoader
+    private val classLoader: ClassLoader,
+    private val moduleApkPath: String?
 ) {
     private val tag = "[PhoneServicesHooks]"
+    private val cellTowerStore: ShanghaiCellTowerStore by lazy {
+        ShanghaiCellTowerStore.fromExternalOrModuleApk(moduleApkPath)
+    }
 
-    fun initHooks() {
+    fun init() {
         val phoneInterfaceManagerClass = findClass(
             classLoader,
             "com.android.phone.PhoneInterfaceManager"
@@ -45,7 +52,7 @@ class PhoneServicesHooks(
 
     private fun hookCellInfo(phoneInterfaceManagerClass: Class<*>) {
         hookAll(phoneInterfaceManagerClass, "getAllCellInfo") { chain ->
-            when (val replay = allCellInfoHookResult(chain.args)) {
+            when (val replay = allCellInfoHookResult(chain.args, cellInfoFallback = ::shanghaiCellInfo)) {
                 PhoneServiceHookResult.Passthrough -> chain.proceed()
                 is PhoneServiceHookResult.Spoofed -> {
                     module.log(Log.INFO, tag, "Replayed saved all cell info while spoofing (${replay.value.size} records).")
@@ -55,7 +62,10 @@ class PhoneServicesHooks(
         }
 
         hookAll(phoneInterfaceManagerClass, "getNeighboringCellInfo") { chain ->
-            when (val replay = neighboringCellInfoHookResult(chain.args)) {
+            when (val replay = neighboringCellInfoHookResult(
+                chain.args,
+                neighboringCellInfoFallback = ::shanghaiNeighboringCellInfo
+            )) {
                 PhoneServiceHookResult.Passthrough -> chain.proceed()
                 is PhoneServiceHookResult.Spoofed -> {
                     module.log(Log.INFO, tag, "Replayed saved neighboring cell info while spoofing (${replay.value.size} records).")
@@ -108,6 +118,22 @@ class PhoneServicesHooks(
         return null
     }
 
+    private fun shanghaiCellInfo(): List<CellInfo> {
+        return CellTowerUtil.createCellInfo(findNearestTowers())
+    }
+
+    private fun shanghaiNeighboringCellInfo(): List<NeighboringCellInfo> {
+        return CellTowerUtil.createNeighboringCellInfo(findNearestTowers())
+    }
+
+    private fun findNearestTowers(): List<ShanghaiCellTower> {
+        val location = PreferencesUtil.getLastClickedLocation() ?: return emptyList()
+        return cellTowerStore.findNearest(
+            latitude = location.latitude,
+            longitude = location.longitude
+        )
+    }
+
     private fun defaultReturnValue(method: Method?): Any? {
         return when (method?.returnType) {
             java.lang.Boolean.TYPE -> false
@@ -146,20 +172,26 @@ class PhoneServicesHooks(
 
         internal fun allCellInfoHookResult(
             args: List<Any?>?,
-            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline,
+            cellInfoFallback: () -> List<CellInfo> = ::emptyCellInfo
         ): PhoneServiceHookResult<List<CellInfo>> {
             if (!shouldSpoofPhoneServiceArgs(args)) return PhoneServiceHookResult.Passthrough
             return PhoneServiceHookResult.Spoofed(
                 CellularBaselineReplay.replayAllCellInfo(cellularProvider())
+                    .ifEmpty { cellInfoFallback() }
             )
         }
 
         internal fun neighboringCellInfoHookResult(
             args: List<Any?>?,
-            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline
+            cellularProvider: () -> CellularBaselineSnapshot? = ::activeCellularBaseline,
+            neighboringCellInfoFallback: () -> List<NeighboringCellInfo> = ::emptyNeighboringCellInfo
         ): PhoneServiceHookResult<List<NeighboringCellInfo>> {
             if (!shouldSpoofPhoneServiceArgs(args)) return PhoneServiceHookResult.Passthrough
-            return PhoneServiceHookResult.Spoofed(CellularBaselineReplay.replayNeighboringCellInfo(cellularProvider()))
+            return PhoneServiceHookResult.Spoofed(
+                CellularBaselineReplay.replayNeighboringCellInfo(cellularProvider())
+                    .ifEmpty { neighboringCellInfoFallback() }
+            )
         }
 
         internal fun shouldSpoofPhoneServiceArgs(args: List<Any?>?): Boolean {
@@ -177,6 +209,10 @@ class PhoneServicesHooks(
             if (value is String) return value.takeIf { "." in it && !it.startsWith("android.") }
             return null
         }
+
+        private fun emptyCellInfo(): List<CellInfo> = emptyList()
+
+        private fun emptyNeighboringCellInfo(): List<NeighboringCellInfo> = emptyList()
     }
 }
 

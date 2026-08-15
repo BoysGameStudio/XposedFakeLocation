@@ -1,12 +1,9 @@
-package com.noobexon.xposedfakelocation.manager.ui.drawer
+package com.noobexon.xposedfakelocation.manager.ui.map
 
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,17 +12,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.noobexon.xposedfakelocation.BuildConfig
 import com.noobexon.xposedfakelocation.R
 import com.noobexon.xposedfakelocation.manager.ui.navigation.Screen
@@ -45,11 +42,11 @@ import compose.icons.lineawesomeicons.Discord
 import compose.icons.lineawesomeicons.Github
 import compose.icons.lineawesomeicons.HeartSolid
 import compose.icons.lineawesomeicons.InfoCircleSolid
-import compose.icons.lineawesomeicons.MapMarkerAltSolid
 import compose.icons.lineawesomeicons.MapSolid
 import compose.icons.lineawesomeicons.MobileAltSolid
 import compose.icons.lineawesomeicons.Telegram
 
+/** Centralised spacing and size constants for the navigation drawer layout. */
 private object DrawerDimensions {
     val SECTION_SPACING = 24.dp
     val ITEM_SPACING = 4.dp
@@ -61,12 +58,47 @@ private object DrawerDimensions {
     val ITEM_CORNER_RADIUS = 12.dp
 }
 
+// TODO: Think on how to ask users for stars on github if they like the module.
+
+/**
+ * Content of the [ModalNavigationDrawer] used throughout the app.
+ *
+ * Renders three sections — Navigation, Community, and App Info — plus a sticky version footer at
+ * the bottom. Navigation items highlight the currently active destination reactively via
+ * [currentBackStackEntryAsState].
+ *
+ * **Navigation behaviour**: tapping a navigation item calls the internal `navigateTo` helper which:
+ * - Skips [NavController.navigate] if the destination is already active (avoids duplicate back-
+ *   stack entries) but still closes the drawer.
+ * - Calls [onNavigate] before navigating to a *different* destination so [MapScreen] can record
+ *   the drawer-reopen intent (see [MapViewModel.requestReopenDrawer]).
+ * - Uses `launchSingleTop = true` to prevent multiple copies of the same screen on the back stack.
+ *
+ * Community items (Telegram, Discord, GitHub) open an [Intent.ACTION_VIEW] external link and then
+ * close the drawer; they do not trigger [onNavigate].
+ *
+ * @param navController Used to read the current destination and perform in-app navigation.
+ * @param onCloseDrawer Callback that closes the [ModalNavigationDrawer]; called after every item
+ *   tap (navigation or external link).
+ * @param onNavigate Callback invoked before navigating to a *different* screen. Used by
+ *   [MapScreen] to set the drawer-reopen flag so the drawer is restored when the user goes back.
+ */
 @Composable
 fun DrawerContent(
     navController: NavController,
-    onCloseDrawer: () -> Unit = {}
+    onCloseDrawer: () -> Unit = {},
+    onNavigate: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val navigateTo: (String) -> Unit = { route ->
+        if (route != currentRoute) {
+            onNavigate()
+            navController.navigate(route) { launchSingleTop = true }
+        }
+        onCloseDrawer()
+    }
 
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -84,41 +116,29 @@ fun DrawerContent(
             DrawerItem(
                 icon = LineAwesomeIcons.MapSolid,
                 label = stringResource(R.string.drawer_map),
-                onClick = {
-                    navController.navigate(Screen.Map.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.Map.route
+                onClick = { navigateTo(Screen.Map.route) },
+                isSelected = currentRoute == Screen.Map.route
             )
 
             DrawerItem(
                 icon = LineAwesomeIcons.HeartSolid,
                 label = stringResource(R.string.screen_favorites),
-                onClick = {
-                    navController.navigate(Screen.Favorites.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.Favorites.route
+                onClick = { navigateTo(Screen.Favorites.route) },
+                isSelected = currentRoute == Screen.Favorites.route
             )
 
             DrawerItem(
                 icon = LineAwesomeIcons.MobileAltSolid,
                 label = stringResource(R.string.screen_target_apps),
-                onClick = {
-                    navController.navigate(Screen.TargetApps.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.TargetApps.route
+                onClick = { navigateTo(Screen.TargetApps.route) },
+                isSelected = currentRoute == Screen.TargetApps.route
             )
 
             DrawerItem(
                 icon = Icons.Default.Settings,
                 label = stringResource(R.string.screen_settings),
-                onClick = {
-                    navController.navigate(Screen.Settings.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.Settings.route
+                onClick = { navigateTo(Screen.Settings.route) },
+                isSelected = currentRoute == Screen.Settings.route
             )
 
             Spacer(modifier = Modifier.height(DrawerDimensions.SECTION_SPACING))
@@ -160,11 +180,8 @@ fun DrawerContent(
             DrawerItem(
                 icon = LineAwesomeIcons.InfoCircleSolid,
                 label = stringResource(R.string.screen_about),
-                onClick = {
-                    navController.navigate(Screen.About.route)
-                    onCloseDrawer()
-                },
-                isSelected = navController.currentDestination?.route == Screen.About.route
+                onClick = { navigateTo(Screen.About.route) },
+                isSelected = currentRoute == Screen.About.route
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -181,8 +198,11 @@ fun DrawerContent(
     }
 }
 
+/**
+ * Sticky header at the top of the drawer sheet showing the app name and a short subtitle.
+ */
 @Composable
-fun DrawerHeader() {
+private fun DrawerHeader() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,8 +223,13 @@ fun DrawerHeader() {
     }
 }
 
+/**
+ * Small, coloured section heading rendered above a group of [DrawerItem]s.
+ *
+ * @param title The section label (e.g. "Navigation", "Community").
+ */
 @Composable
-fun DrawerSectionHeader(title: String) {
+private fun DrawerSectionHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,
@@ -217,8 +242,21 @@ fun DrawerSectionHeader(title: String) {
     )
 }
 
+/**
+ * A single tappable row in the navigation drawer.
+ *
+ * When [isSelected] is `true`, the row is rendered with a filled `primaryContainer` background and
+ * `onPrimaryContainer` tint to provide active-destination feedback. Otherwise it renders on a
+ * transparent background with the default `onSurface` tint.
+ *
+ * @param icon Leading icon for the item.
+ * @param label Display label text.
+ * @param onClick Action invoked when the row is tapped.
+ * @param isSelected Whether this item represents the currently active destination.
+ * @param trailingIcon Optional composable placed at the end of the row (e.g. a badge or arrow).
+ */
 @Composable
-fun DrawerItem(
+private fun DrawerItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

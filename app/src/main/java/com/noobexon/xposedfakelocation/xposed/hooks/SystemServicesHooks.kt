@@ -5,6 +5,7 @@ package com.noobexon.xposedfakelocation.xposed.hooks
 
 import android.location.Location
 import android.location.LocationManager
+import android.net.wifi.WifiInfo
 import android.os.Build
 import android.os.Bundle
 import android.telephony.CellLocation
@@ -30,7 +31,7 @@ class SystemServicesHooks(
 ) {
     private val tag = "[SystemServicesHooks]"
 
-    fun initHooks() {
+    fun init() {
         hookLastLocation(classLoader)
         hookCurrentLocation(classLoader)
         hookLocationDispatch(classLoader)
@@ -111,7 +112,7 @@ class SystemServicesHooks(
         registrations.forEach { (key, value) ->
             originalRegistrations[key] = value
             val packageNames = collectPackageNames(value)
-            val spoofedPackage = packageNames.firstOrNull(LocationUtil::shouldSpoofPackage)
+val spoofedPackage = packageNames.firstOrNull { shouldSpoofPackage(it) }
             if (spoofedPackage != null) {
                 // Deliver a fake location directly to this target registration and exclude it from
                 // the passthrough set so the real location is never pushed to it below.
@@ -209,7 +210,7 @@ class SystemServicesHooks(
     private fun interceptCallLocationChanged(chain: Chain): Any? {
         if (PreferencesUtil.getIsPlaying() != true) return chain.proceed()
         // The Receiver itself carries the caller package, so attribute by inspecting `thisObject`.
-        if (collectPackageNames(chain.thisObject).none(LocationUtil::shouldSpoofPackage)) return chain.proceed()
+if (collectPackageNames(chain.thisObject).none { shouldSpoofPackage(it) }) return chain.proceed()
 
         val args = chain.args
         val locationArgIndex = args.indexOfFirst { it is Location }
@@ -221,6 +222,19 @@ class SystemServicesHooks(
         module.log(Log.INFO, tag, "Replaced Receiver.callLocationChangedLocked argument.")
         return chain.proceed(newArgs)
     }
+
+    // Name-based scope attribution for the system-level hooks: a package is spoofed only when it is
+    // one of the manager-selected target apps (mirrored into the remote `target_apps` preference).
+    private fun shouldSpoofPackage(packageName: String?): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        return PreferencesUtil.getTargetApps().contains(packageName)
+    }
+
+    /** Attributes the Binder call to a selected target package after the shared gate passes. */
+    private fun shouldSpoofWifiArgs(
+        args: List<Any?>?,
+        targetApps: Set<String>
+    ): Boolean = WifiIdentityHookPolicy.targetsSystemWifiCaller(args, targetApps)
 
     private fun hookGnssRegistration(classLoader: ClassLoader) {
         val serviceClasses = listOfNotNull(
@@ -282,33 +296,52 @@ class SystemServicesHooks(
 
     private fun hookWifiServiceImpl(wifiServiceClass: Class<*>) {
         hookAll(wifiServiceClass, "getScanResults") { chain ->
-            val method = chain.executable as? Method
-            when (val replay = wifiScanResultsHookDecision(
-                args = chain.args,
-                method = method,
-                shouldSpoofArgs = ::shouldSpoofArgs
-            )) {
-                SystemServiceHookResult.Passthrough -> chain.proceed()
-                is SystemServiceHookResult.Spoofed -> {
-                    module.log(Log.INFO, tag, "Replayed Wi-Fi scan results while spoofing (${replay.value.values.size} records).")
-                    WifiBaselineReplay.replayScanResults(replay.value)
+            val identity = WifiIdentityHookPolicy.readActiveIdentity(module)
+            if (identity != null && shouldSpoofWifiArgs(chain.args, identity.targetApps)) {
+                module.log(Log.INFO, tag, "Cleared Wi-Fi scan results while spoofing.")
+                emptyList<Any>()
+            } else {
+                when (val replay = wifiScanResultsHookDecision(
+                    args = chain.args,
+                    method = chain.executable as? Method,
+                    shouldSpoofArgs = ::shouldSpoofArgs
+                )) {
+                    SystemServiceHookResult.Passthrough -> chain.proceed()
+                    is SystemServiceHookResult.Spoofed -> {
+                        module.log(Log.INFO, tag, "Replayed Wi-Fi scan results while spoofing (${replay.value.values.size} records).")
+                        WifiBaselineReplay.replayScanResults(replay.value)
+                    }
                 }
             }
         }
 
         hookAll(wifiServiceClass, "getConnectionInfo") { chain ->
-            when (val replay = wifiConnectionInfoHookDecision(
-                args = chain.args,
-                shouldSpoofArgs = ::shouldSpoofArgs
-            )) {
-                SystemServiceHookResult.Passthrough -> chain.proceed()
-                is SystemServiceHookResult.Spoofed -> {
-                    module.log(Log.INFO, tag, "Replayed Wi-Fi connection info while spoofing.")
-                    WifiBaselineReplay.replayConnectionInfo(replay.value)
+            val identity = WifiIdentityHookPolicy.readActiveIdentity(module)
+            if (identity != null && shouldSpoofWifiArgs(chain.args, identity.targetApps)) {
+                module.log(Log.INFO, tag, "Replaced Wi-Fi connection info while spoofing.")
+                createFakeWifiInfo(identity)
+            } else {
+                when (val replay = wifiConnectionInfoHookDecision(
+                    args = chain.args,
+                    shouldSpoofArgs = ::shouldSpoofArgs
+                )) {
+                    SystemServiceHookResult.Passthrough -> chain.proceed()
+                    is SystemServiceHookResult.Spoofed -> {
+                        module.log(Log.INFO, tag, "Replayed Wi-Fi connection info while spoofing.")
+                        WifiBaselineReplay.replayConnectionInfo(replay.value)
+                    }
                 }
             }
         }
     }
+
+    private fun createFakeWifiInfo(identity: WifiIdentity): WifiInfo =
+        WifiInfo.Builder()
+            .setBssid(identity.bssid)
+            .setSsid(identity.ssid.toByteArray())
+            .setRssi(identity.rssi)
+            .setNetworkId(0)
+            .build()
 
     private fun hookGeofence(classLoader: ClassLoader) {
         val serviceClass = findClass(
@@ -413,7 +446,7 @@ class SystemServicesHooks(
         return args?.asSequence()
             ?.flatMap { collectPackageNames(it).asSequence() }
             ?.distinct()
-            ?.any(LocationUtil::shouldSpoofPackage) == true
+            ?.any { shouldSpoofPackage(it) } == true
     }
 
     private fun collectPackageNames(value: Any?): Set<String> {
@@ -595,7 +628,7 @@ class SystemServicesHooks(
         }
     }
 
-    internal companion object {
+internal companion object {
         internal fun wifiConnectionInfoHookDecision(
             args: List<Any?>?,
             shouldSpoofArgs: (List<Any?>?) -> Boolean = ::shouldSpoofSimpleArgs,

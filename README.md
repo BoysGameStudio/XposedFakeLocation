@@ -1,12 +1,12 @@
 # **XposedFakeLocation**
 
-![GitHub License](https://img.shields.io/github/license/noobexon1/XposedFakeLocation?color=blue)
-![GitHub Release Date](https://img.shields.io/github/release-date/noobexon1/XposedFakeLocation?color=violet)
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/noobexon1/XposedFakeLocation/total)
-![GitHub repo size](https://img.shields.io/github/repo-size/noobexon1/XposedFakeLocation)
-![GitHub Repo stars](https://img.shields.io/github/stars/noobexon1/XposedFakeLocation)
-![GitHub Release](https://img.shields.io/github/v/release/noobexon1/XposedFakeLocation?color=red)
-[![Platform](https://img.shields.io/badge/platform-Android-green.svg)]()
+[![GitHub License](https://img.shields.io/github/license/noobexon1/XposedFakeLocation?style=for-the-badge&color=red&logo=googledocs&logoColor=red)](https://github.com/noobexon1/XposedFakeLocation/blob/master/LICENSE)
+[![GitHub Release Date](https://img.shields.io/github/release-date/noobexon1/XposedFakeLocation?style=for-the-badge&label=updated%20in&logo=clockify&logoColor=violet&color=violet)](https://github.com/noobexon1/XposedFakeLocation/releases/latest)
+[![GitHub Release](https://img.shields.io/github/v/release/noobexon1/XposedFakeLocation?style=for-the-badge&color=teal&logo=accenture&logoColor=teal)](https://github.com/noobexon1/XposedFakeLocation/releases/latest)
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/noobexon1/XposedFakeLocation/total?style=for-the-badge&logo=rolldown&logoColor=blue&label=downloads%20(repo)&color=blue)](https://github.com/noobexon1/XposedFakeLocation/releases)
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Xposed-Modules-Repo/com.noobexon.xposedfakelocation/total?style=for-the-badge&logo=rolldown&label=downloads%20(LSPosed)&logoColor=pink&color=pink)](https://github.com/Xposed-Modules-Repo/com.noobexon.xposedfakelocation/releases)
+[![GitHub Repo stars](https://img.shields.io/github/stars/noobexon1/XposedFakeLocation?style=for-the-badge&logo=apachespark&color=yellow)](https://github.com/noobexon1/XposedFakeLocation/stargazers)
+![Platform](https://img.shields.io/badge/platform-Android-green.svg?style=for-the-badge&logo=android)
 
 **XposedFakeLocation** is an Android application and Xposed module that allows you to spoof your device's location for specific apps — and, optionally, at the system level — without using "mock location" from the developer options. Customize your location with precision, including sensor data, and add randomization within a specified radius for enhanced privacy.
 
@@ -39,7 +39,7 @@
 ## **Features**
 
 - **Per-App Location Spoofing**: Pick the apps that should receive a fake location directly inside the app — your selection drives the LSPosed module scope automatically, so you never have to manage scope by hand.
-- **Optional System-Level Hooks**: Extend spoofing into the Android system framework (`android`) and the phone process (`com.android.phone`) for deeper coverage, via a single toggle in Settings.
+- **Optional System-Level Hooks**: Extend spoofing into `system_server` (`system`) and the phone process (`com.android.phone`) for deeper coverage, via a single toggle in Settings.
 - **Custom Coordinates**: Set precise GPS latitude and longitude coordinates by tapping the integrated map.
 - **Fine-Tuned Spoofing Settings**: Customize sensor values such as horizontal/vertical accuracy, altitude, mean sea level (and its accuracy), speed (and its accuracy), and GPS noise.
 - **Randomization**: Set a radius for location randomization to mimic real-world movement patterns.
@@ -93,7 +93,7 @@ If you want to build by yourself:
    - Open a recent **LSPosed Manager** that supports the new API (see [Prerequisites](#prerequisites)).
    - Enable the `XposedFakeLocation` module and reboot once.
    - **Select target apps from inside `XposedFakeLocation`** (the `Target Apps` screen). Your selection updates the module's LSPosed scope automatically — there's no need to manage scope manually in LSPosed.
-   - **(Optional) System-level hooks:** to spoof the Android system framework (`android`) and phone process (`com.android.phone`) as well, open `Settings` inside `XposedFakeLocation` and enable **`Enable system-level hooks`**. This adds those packages to the scope; **reboot** your device for the change to take effect (and reboot again after turning it off).
+   - **(Optional) System-level hooks:** to spoof `system_server` (`system`) and phone process (`com.android.phone`) as well, open `Settings` inside `XposedFakeLocation` and enable **`Enable system-level hooks`**. This adds those packages to the scope; **reboot** your device for the change to take effect (and reboot again after turning it off).
 
 > [!NOTE]
 > From now on, all you need to do in `LSPosed` is **enable the module** — the entire scope is managed from within the `XposedFakeLocation` app itself. Adding/removing target apps and toggling system-level hooks updates the LSPosed scope automatically, so you should not edit the module's scope manually in `LSPosed`.
@@ -199,4 +199,12 @@ This application is intended for **development and testing purposes only**. Misu
 - [Line Awesome Icons](https://icons8.com/line-awesome) - Beautiful icon set used in the app.
 - [FuckLocation](https://github.com/Mikotwa/FuckLocation) - Reference for additional Android location hook handling.
 
+## **Star History**
 
+<a href="https://www.star-history.com/?repos=noobexon1%2FXposedFakeLocation&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=noobexon1/XposedFakeLocation&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=noobexon1/XposedFakeLocation&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=noobexon1/XposedFakeLocation&type=date&legend=top-left" />
+ </picture>
+</a>

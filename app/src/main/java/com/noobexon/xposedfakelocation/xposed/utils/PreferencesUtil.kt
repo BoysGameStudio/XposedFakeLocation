@@ -1,4 +1,3 @@
-// PreferencesUtil.kt
 package com.noobexon.xposedfakelocation.xposed.utils
 
 import android.content.SharedPreferences
@@ -6,43 +5,130 @@ import android.os.Build
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.noobexon.xposedfakelocation.data.*
+import com.noobexon.xposedfakelocation.data.DEFAULT_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_ALTITUDE
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.DEFAULT_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED
+import com.noobexon.xposedfakelocation.data.DEFAULT_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_BSSID
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.DEFAULT_WIFI_SSID
+import com.noobexon.xposedfakelocation.data.KEY_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_ALTITUDE
+import com.noobexon.xposedfakelocation.data.KEY_ENABLE_SYSTEM_HOOKS
+import com.noobexon.xposedfakelocation.data.KEY_HIDE_FAKE_LOCATION_TOAST
+import com.noobexon.xposedfakelocation.data.KEY_IS_PLAYING
+import com.noobexon.xposedfakelocation.data.KEY_LAST_CLICKED_LOCATION
+import com.noobexon.xposedfakelocation.data.KEY_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.KEY_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_RANDOMIZE_RADIUS
+import com.noobexon.xposedfakelocation.data.KEY_SPEED
+import com.noobexon.xposedfakelocation.data.KEY_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_TARGET_APPS
+import com.noobexon.xposedfakelocation.data.KEY_USE_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_ALTITUDE
+import com.noobexon.xposedfakelocation.data.KEY_USE_MEAN_SEA_LEVEL
+import com.noobexon.xposedfakelocation.data.KEY_USE_MEAN_SEA_LEVEL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_RANDOMIZE
+import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED
+import com.noobexon.xposedfakelocation.data.KEY_USE_SPEED_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_USE_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_VERTICAL_ACCURACY
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_BSSID
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.KEY_WIFI_SSID
+import com.noobexon.xposedfakelocation.data.KEY_SIGNAL_BASELINE_SNAPSHOT
+import com.noobexon.xposedfakelocation.data.MAC_ADDRESS_REGEX
+import com.noobexon.xposedfakelocation.data.MAX_WIFI_RSSI
+import com.noobexon.xposedfakelocation.data.MIN_WIFI_RSSI
 import com.noobexon.xposedfakelocation.data.model.LastClickedLocation
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineCodec
 import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
+import com.noobexon.xposedfakelocation.data.normalizeWifiSsid
 
+/**
+ * Hook-side accessor for the LSPosed remote [SharedPreferences] written by the manager app.
+ *
+ * All spoofing settings (coordinates, toggles, target app list) live in the remote preference
+ * group and are read here on every hook intercept, ensuring hooks always reflect the latest
+ * manager state without requiring a process restart.
+ *
+ * Must be initialised via [init] before any getter is called. Typically called from
+ * [com.noobexon.xposedfakelocation.xposed.ModuleEntry.onPackageLoaded].
+ */
 object PreferencesUtil {
     private const val TAG = "[PreferencesUtil]"
+    private val gson = Gson()
 
+    /**
+     * Optional logger wired in by [com.noobexon.xposedfakelocation.xposed.ModuleEntry].
+     * Routes log calls through the libxposed logging channel.
+     */
     @Volatile var logger: ((Int, String, String) -> Unit)? = null
     private fun log(msg: String, priority: Int = Log.INFO) = logger?.invoke(priority, TAG, msg)
 
     @Volatile private var preferences: SharedPreferences? = null
 
-    // IMPORTANT: keep a strong reference. SharedPreferences holds listeners *weakly*,
-    // so a listener that isn't referenced anywhere gets GC'd and silently stops firing.
+    /**
+     * IMPORTANT: must be held as a strong reference. [SharedPreferences] registers listeners
+     * weakly, so a listener with no other reference will be GC'd and silently stop firing.
+     */
     private val changeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            log("Remote pref changed: $key")
+        log("Remote pref changed: $key")
     }
 
+    /**
+     * Initialises this util with the LSPosed remote [SharedPreferences] for the module's
+     * settings group. Registers a change listener to log preference updates.
+     *
+     * Safe to call multiple times — subsequent calls replace the previous preferences instance.
+     */
     fun init(prefs: SharedPreferences) {
         preferences = prefs
         prefs.registerOnSharedPreferenceChangeListener(changeListener)
         log("Initialized with remote preferences")
     }
 
+    /** @return `true` if spoofing is currently active, `false`/`null` if not set. */
+    fun getIsPlaying(): Boolean? = getPreference(KEY_IS_PLAYING)
+    fun getLastClickedLocation(): LastClickedLocation? = getPreference(KEY_LAST_CLICKED_LOCATION)
+    fun getUseAccuracy(): Boolean? = getPreference(KEY_USE_ACCURACY)
+    fun getAccuracy(): Double? = getPreference(KEY_ACCURACY)
+    fun getUseAltitude(): Boolean? = getPreference(KEY_USE_ALTITUDE)
+    fun getAltitude(): Double? = getPreference(KEY_ALTITUDE)
+    fun getUseRandomize(): Boolean? = getPreference(KEY_USE_RANDOMIZE)
+    fun getRandomizeRadius(): Double? = getPreference(KEY_RANDOMIZE_RADIUS)
+    fun getUseVerticalAccuracy(): Boolean? = getPreference(KEY_USE_VERTICAL_ACCURACY)
+    fun getVerticalAccuracy(): Float? = getPreference(KEY_VERTICAL_ACCURACY)
+    fun getUseMeanSeaLevel(): Boolean? = getPreference(KEY_USE_MEAN_SEA_LEVEL)
+    fun getMeanSeaLevel(): Double? = getPreference(KEY_MEAN_SEA_LEVEL)
+    fun getUseMeanSeaLevelAccuracy(): Boolean? = getPreference(KEY_USE_MEAN_SEA_LEVEL_ACCURACY)
+    fun getMeanSeaLevelAccuracy(): Float? = getPreference(KEY_MEAN_SEA_LEVEL_ACCURACY)
+    fun getUseSpeed(): Boolean? = getPreference(KEY_USE_SPEED)
+    fun getSpeed(): Float? = getPreference(KEY_SPEED)
+    fun getUseSpeedAccuracy(): Boolean? = getPreference(KEY_USE_SPEED_ACCURACY)
+    fun getSpeedAccuracy(): Float? = getPreference(KEY_SPEED_ACCURACY)
+    fun getHideFakeLocationToast(): Boolean? = getPreference(KEY_HIDE_FAKE_LOCATION_TOAST)
+    fun getEnableSystemHooks(): Boolean = preferences?.getBoolean(KEY_ENABLE_SYSTEM_HOOKS, false) ?: false
+
+    fun getWifiSsid(): String =
+        normalizeWifiSsid(preferences?.getString(KEY_WIFI_SSID, DEFAULT_WIFI_SSID))
+
     private val locationProxyPackages = setOf(
         "com.android.location.fused",
         "com.google.android.gms"
     )
 
-    fun getIsPlaying(): Boolean? {
-        return getPreference<Boolean>(KEY_IS_PLAYING)
+    fun getLocationProxyPackages(): Set<String> {
+        return locationProxyPackages
     }
 
-    fun getLastClickedLocation(): LastClickedLocation? {
-        return getPreference<LastClickedLocation>(KEY_LAST_CLICKED_LOCATION)
-    }
+    fun getWifiBssid(): String =
+        preferences?.getString(KEY_WIFI_BSSID, DEFAULT_WIFI_BSSID)?.trim()?.takeIf(MAC_ADDRESS_REGEX::matches)
+            ?: DEFAULT_WIFI_BSSID
 
     fun getSignalBaseline(
         currentSdkInt: Int = Build.VERSION.SDK_INT,
@@ -56,88 +142,36 @@ object PreferencesUtil {
         }.getOrNull()
     }
 
-    fun getUseAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_ACCURACY)
-    }
+    fun getWifiRssi(): Int =
+        preferences?.getInt(KEY_WIFI_RSSI, DEFAULT_WIFI_RSSI)?.coerceIn(MIN_WIFI_RSSI, MAX_WIFI_RSSI)
+            ?: DEFAULT_WIFI_RSSI
 
-    fun getAccuracy(): Double? {
-        return getPreference<Double>(KEY_ACCURACY)
-    }
-
-    fun getUseAltitude(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_ALTITUDE)
-    }
-
-    fun getAltitude(): Double? {
-        return getPreference<Double>(KEY_ALTITUDE)
-    }
-
-    fun getUseRandomize(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_RANDOMIZE)
-    }
-
-    fun getRandomizeRadius(): Double? {
-        return getPreference<Double>(KEY_RANDOMIZE_RADIUS)
-    }
-
-    fun getUseVerticalAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_VERTICAL_ACCURACY)
-    }
-
-    fun getVerticalAccuracy(): Float? {
-        return getPreference<Float>(KEY_VERTICAL_ACCURACY)
-    }
-
-    fun getUseMeanSeaLevel(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_MEAN_SEA_LEVEL)
-    }
-
-    fun getMeanSeaLevel(): Double? {
-        return getPreference<Double>(KEY_MEAN_SEA_LEVEL)
-    }
-
-    fun getUseMeanSeaLevelAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_MEAN_SEA_LEVEL_ACCURACY)
-    }
-
-    fun getMeanSeaLevelAccuracy(): Float? {
-        return getPreference<Float>(KEY_MEAN_SEA_LEVEL_ACCURACY)
-    }
-
-    fun getUseSpeed(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_SPEED)
-    }
-
-    fun getSpeed(): Float? {
-        return getPreference<Float>(KEY_SPEED)
-    }
-
-    fun getUseSpeedAccuracy(): Boolean? {
-        return getPreference<Boolean>(KEY_USE_SPEED_ACCURACY)
-    }
-
-    fun getSpeedAccuracy(): Float? {
-        return getPreference<Float>(KEY_SPEED_ACCURACY)
-    }
-
-    fun getHideFakeLocationToast(): Boolean? {
-        return getPreference<Boolean>(KEY_HIDE_FAKE_LOCATION_TOAST)
-    }
-
-    // Mirrors the manager-side scope selection. Stored by PreferencesRepository as a JSON array
-    // of package names, so it must be parsed the same way here (not via the generic getPreference).
+    /**
+     * Returns the set of package names selected by the user as spoofing targets.
+     *
+     * Stored as a JSON array in remote preferences and parsed on each call.
+     * Returns an empty set if preferences are uninitialised, the key is absent, or parsing fails.
+     */
     fun getTargetApps(): Set<String> {
         val prefs = preferences ?: return emptySet()
         val json = prefs.getString(KEY_TARGET_APPS, null) ?: return emptySet()
-        return try {
+        return runCatching {
             val type = object : TypeToken<List<String>>() {}.type
-            Gson().fromJson<List<String>?>(json, type)?.toSet() ?: emptySet()
-        } catch (e: Exception) {
-            log("Error parsing $KEY_TARGET_APPS JSON: ${e.message}", Log.ERROR)
-            emptySet()
-        }
+            gson.fromJson<List<String>?>(json, type)?.toSet() ?: emptySet()
+        }.onFailure { log("Error parsing $KEY_TARGET_APPS JSON: ${it.message}", Log.ERROR) }
+            .getOrDefault(emptySet())
     }
 
+    /**
+     * Generic preference reader. Dispatches to the correct [SharedPreferences] getter based
+     * on the reified type [T]:
+     * - [Double] — stored as raw long bits via [java.lang.Double.doubleToRawLongBits] to work
+     *   around the lack of a `putDouble` API on [SharedPreferences].
+     * - [Float] / [Boolean] — stored natively.
+     * - Everything else — stored as a JSON string and deserialised with [gson].
+     *
+     * Returns `null` if preferences are not yet initialised or the key is absent.
+     */
     private inline fun <reified T> getPreference(key: String): T? {
         val preferences = preferences ?: return null
         return when (T::class) {
@@ -164,21 +198,12 @@ object PreferencesUtil {
             }
             Boolean::class -> preferences.getBoolean(key, false) as? T
             else -> {
-                val json = preferences.getString(key, null)
-                if (json != null) {
-                    try {
-                        Gson().fromJson(json, T::class.java).also {
-                            log("Retrieved $key: $it")
-                        }
-                    } catch (e: Exception) {
-                        log("Error parsing $key JSON: ${e.message}")
-                        null
-                    }
-                } else {
-                    log("$key not found in preferences.")
-                    null
-                }
+                val json = preferences.getString(key, null) ?: return null.also { log("$key not found in preferences.") }
+                runCatching { gson.fromJson(json, T::class.java).also { log("Retrieved $key: $it") } }
+                    .onFailure { log("Error parsing $key JSON: ${it.message}") }
+                    .getOrNull()
             }
         }
     }
+
 }

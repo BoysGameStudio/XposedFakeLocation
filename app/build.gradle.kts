@@ -33,7 +33,7 @@ android {
 
     defaultConfig {
         applicationId = "com.noobexon.xposedfakelocation"
-        minSdk = 30
+        minSdk = 29
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
@@ -65,6 +65,7 @@ android {
 
     kotlinOptions {
         jvmTarget = "21"
+        freeCompilerArgs = listOf("-XXLanguage:+PropertyParamAnnotationDefaultTargetMode")
     }
 
     buildFeatures {

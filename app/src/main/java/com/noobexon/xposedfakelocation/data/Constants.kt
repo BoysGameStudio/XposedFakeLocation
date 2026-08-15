@@ -48,9 +48,17 @@ const val KEY_ENABLE_BROADCAST_CONTROL = "enable_broadcast_control"
 const val KEY_LANGUAGE_TAG = "language_tag"
 
 const val KEY_ENABLE_SYSTEM_HOOKS = "enable_system_hooks"
+const val KEY_ENABLE_WIFI_IDENTITY = "enable_wifi_identity"
+
+const val KEY_THEME_OPTION = "theme_option"
+
+const val KEY_WIFI_SSID = "wifi_ssid"
+const val KEY_WIFI_BSSID = "wifi_bssid"
+const val KEY_WIFI_RSSI = "wifi_rssi"
 
 // Packages added/removed from module scope when system-level hooks are toggled.
-val SYSTEM_HOOK_PACKAGES = listOf("android", "com.android.phone")
+// Modern libxposed uses `system` as the virtual package name for system_server.
+val SYSTEM_HOOK_PACKAGES = listOf("system", "com.android.phone")
 
  // DEFAULT VALUES
 const val DEFAULT_USE_ACCURACY = false
@@ -83,12 +91,35 @@ const val DEFAULT_ENABLE_BROADCAST_CONTROL = false
 const val DEFAULT_LANGUAGE_TAG = ""
 
 const val DEFAULT_ENABLE_SYSTEM_HOOKS = false
+const val DEFAULT_ENABLE_WIFI_IDENTITY = false
+
+const val DEFAULT_THEME_OPTION = ""
+
+const val DEFAULT_WIFI_SSID = "AndroidAP"
+const val DEFAULT_WIFI_BSSID = "02:00:00:00:00:00"
+const val DEFAULT_WIFI_RSSI = -60
+const val MAX_WIFI_SSID_BYTES = 32
+const val MIN_WIFI_RSSI = -127
+const val MAX_WIFI_RSSI = 0
+val MAC_ADDRESS_REGEX = Regex("(?i)^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+
+fun normalizeWifiSsid(rawSsid: String?): String {
+    val trimmed = rawSsid?.trim().orEmpty()
+    val utf8 = trimmed.toByteArray(Charsets.UTF_8)
+    val isValidUtf8 = utf8.toString(Charsets.UTF_8) == trimmed
+    return if (trimmed.isNotEmpty() && isValidUtf8 && utf8.size <= MAX_WIFI_SSID_BYTES) {
+        trimmed
+    } else {
+        DEFAULT_WIFI_SSID
+    }
+}
 
 // MATH & PHYS
 const val PI = 3.14159265359
 const val RADIUS_EARTH = 6378137.0 // Approximately Earth's radius in meters
 
 // MAP SETTINGS
+const val KEY_MAP_ZOOM = "map_zoom"
 const val DEFAULT_MAP_ZOOM = 18.0
 const val WORLD_MAP_ZOOM = 2.0
 const val LOCATION_DETECTION_MAX_ATTEMPTS = 80
