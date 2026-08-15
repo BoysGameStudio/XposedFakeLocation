@@ -2,6 +2,8 @@ package com.noobexon.xposedfakelocation.manager.ui.map
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SavedLocationProfile
+import com.noobexon.xposedfakelocation.data.model.signalbaseline.SignalBaselineSnapshot
 import org.osmdroid.util.GeoPoint
 
 /**
@@ -48,6 +50,13 @@ data class FavoritesInputState(
  * @property hasResolvedInitialLocation Whether the map has completed its one-time initial camera
  *   positioning. Survives navigation so that re-entering the screen restores the last camera
  *   position instead of re-running location detection.
+ * @property signalBaseline The currently active real-environment signal baseline, or `null` when
+ *   none is set.
+ * @property savedLocationProfiles All saved location profiles (baselines saved with a label).
+ * @property selectedSavedLocationProfile The profile currently selected in the saved-profiles
+ *   dialog, or `null` when the list (rather than a profile detail) is shown.
+ * @property isSignalBaselineDetailsDialogVisible Whether the signal-baseline details dialog is shown.
+ * @property isSavedLocationProfilesDialogVisible Whether the saved-location-profiles dialog is shown.
  */
 @Immutable
 data class MapUiState(
@@ -61,8 +70,24 @@ data class MapUiState(
     val isAddToFavoritesDialogVisible: Boolean = false,
     val goToPointState: GoToPointInputState = GoToPointInputState(),
     val hasResolvedInitialLocation: Boolean = false,
+    val signalBaseline: SignalBaselineSnapshot? = null,
+    val savedLocationProfiles: List<SavedLocationProfile> = emptyList(),
+    val selectedSavedLocationProfile: SavedLocationProfile? = null,
+    val isSignalBaselineDetailsDialogVisible: Boolean = false,
+    val isSavedLocationProfilesDialogVisible: Boolean = false,
 ) {
     /** `true` when the FAB should be interactive, i.e. a spoof target has been placed on the map. */
     val isFabClickable: Boolean
         get() = lastClickedLocation != null
+
+    /** Label of the saved location profile whose baseline matches the active one, or `null`. */
+    val activeLocationProfileLabel: String?
+        get() {
+            val baseline = signalBaseline ?: return null
+            return savedLocationProfiles
+                .firstOrNull { profile -> profile.baseline == baseline }
+                ?.label
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }
 }

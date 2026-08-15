@@ -35,7 +35,7 @@ class MapViewModelSignalBaselineMenuTest {
             label = "Other"
         )
 
-        val state = MapViewModel.MapUiState(
+        val state = MapUiState(
             signalBaseline = activeBaseline,
             savedLocationProfiles = listOf(otherProfile, matchingProfile)
         )
@@ -57,7 +57,7 @@ class MapViewModelSignalBaselineMenuTest {
             label = "Other"
         )
 
-        val state = MapViewModel.MapUiState(
+        val state = MapUiState(
             signalBaseline = activeBaseline,
             savedLocationProfiles = listOf(otherProfile)
         )
